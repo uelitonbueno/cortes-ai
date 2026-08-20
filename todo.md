@@ -98,3 +98,24 @@
 - [x] Adicionar ações para reprocessar, cancelar e atualizar o status do pipeline.
 - [x] Exibir progresso por etapa, jobs recentes e feedback de sucesso/erro com indicador visual derivado dos jobs.
 - [x] Testar mutations, incluindo retry, e validar a tela de detalhe em desktop e mobile.
+
+## Diagnóstico de processamento parado
+
+- [ ] Verificar o job do vídeo, fila Redis, worker e callback após o upload.
+- [ ] Corrigir o motivo pelo qual o job permanece em fila ou não gera artefatos.
+- [ ] Adicionar teste de regressão para execução/enfileiramento do pipeline.
+- [ ] Validar novamente o vídeo e documentar o diagnóstico.
+
+## Worker CPU/FFmpeg em segundo plano
+
+- [ ] Criar consumidor Redis para a fila `pipeline.cpu` com processamento FFmpeg e callback autenticado.
+- [ ] Iniciar o worker em segundo plano no ambiente disponível e registrar PID/log.
+- [ ] Processar o job pendente do vídeo e verificar artefatos normalizado/áudio.
+- [ ] Validar status do job, callback e ausência de duplicidade.
+
+## Sincronização GitHub
+
+- [ ] Verificar remoto, branch e diferenças do repositório `uelitonbueno/cortes-ai`.
+- [ ] Corrigir pendências locais que impeçam a sincronização.
+- [ ] Executar validações antes do commit.
+- [ ] Enviar a versão atual ao GitHub e confirmar o commit remoto.

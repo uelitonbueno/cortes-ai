@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ createSourceVideo: vi.fn(), updateCandidateReview: vi.fn(), listIntegrationSettings: vi.fn(), upsertIntegrationSetting: vi.fn(), startSourceVideoPipeline: vi.fn(), cancelSourceVideoPipeline: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createSourceVideo: vi.fn(), updateCandidateReview: vi.fn(), listIntegrationSettings: vi.fn(), upsertIntegrationSetting: vi.fn(), startSourceVideoPipeline: vi.fn(), cancelSourceVideoPipeline: vi.fn(), getPipelineDetail: vi.fn(), enqueueJob: vi.fn() }));
 const { createSourceVideo, updateCandidateReview } = mocks;
 
 vi.mock("./db", () => ({
@@ -11,7 +11,7 @@ vi.mock("./db", () => ({
   startSourceVideoPipeline: mocks.startSourceVideoPipeline,
   cancelSourceVideoPipeline: mocks.cancelSourceVideoPipeline,
   getAnalyticsSummary: vi.fn(),
-  getPipelineDetail: vi.fn(),
+  getPipelineDetail: mocks.getPipelineDetail,
   getPipelineOverview: vi.fn(),
   listAlerts: vi.fn(),
   listPublications: vi.fn(),
@@ -22,6 +22,7 @@ vi.mock("./db", () => ({
   registerArtifact: vi.fn(),
   createPipelineAlert: vi.fn(),
 }));
+vi.mock("./queue", () => ({ enqueueJob: mocks.enqueueJob }));
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -31,7 +32,7 @@ function context(): TrpcContext {
 }
 
 describe("feature mutations", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mocks.getPipelineDetail.mockResolvedValue({ artifacts: [{ artifactType: "raw_video", storageKey: "owners/22/raw.mp4" }] }); mocks.enqueueJob.mockResolvedValue({ queued: true }); });
 
   it("registers a source video for the authenticated owner", async () => {
     createSourceVideo.mockResolvedValue({ id: 3, ownerId: 22, title: "Podcast", status: "uploaded" });

@@ -58,15 +58,20 @@ export const appRouter = router({
       const stored = await storagePut(`owners/${ctx.user.id}/sources/${source.id}/${safeFileName}`, content, input.mimeType);
       const artifact = await registerArtifact({ sourceVideoId: source.id, ownerId: ctx.user.id, artifactType: "raw_video", storageKey: stored.key, mimeType: input.mimeType, byteSize: content.byteLength });
       const sourceUrl = await storageGetSignedUrl(stored.key);
-      const queue = await enqueueJob({ queue: "cpu", idempotencyKey: `ingest:${source.id}:${input.idempotencyKey}`, payload: { job_id: source.id, source_video_id: source.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: `ingest:${source.id}:${input.idempotencyKey}` } });
+      const queue = await enqueueJob({ queue: "cpu", idempotencyKey: `ingest:${source.id}:${input.idempotencyKey}`, payload: { job_id: source.id, source_video_id: source.id, owner_id: ctx.user.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: `ingest:${source.id}:${input.idempotencyKey}` } });
       return { source, artifact, queue };
     }),
     start: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const result = await startSourceVideoPipeline(ctx.user.id, input.id);
       if (!result) return null;
+      const pipelineDetail = await getPipelineDetail(ctx.user.id, result.videoId);
+      const rawArtifact = pipelineDetail?.artifacts.find(artifact => artifact.artifactType === "raw_video");
+      const sourceUrl = rawArtifact ? await storageGetSignedUrl(rawArtifact.storageKey) : undefined;
       for (const stage of result.stages) {
         const queue = stage === "transcribe" ? "gpu" : stage === "detect_highlights" ? "llm" : "cpu";
-        await enqueueJob({ queue, idempotencyKey: `${stage}:${result.videoId}`, payload: { source_video_id: result.videoId, job_type: stage, owner_id: ctx.user.id, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback` } });
+        const payload = stage === "ingest" ? { job_id: result.videoId, source_video_id: result.videoId, owner_id: ctx.user.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: `${stage}:${result.videoId}` } : { source_video_id: result.videoId, job_type: stage, owner_id: ctx.user.id, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback` };
+        if (stage === "ingest" && !sourceUrl) throw new Error("Artefato bruto não encontrado para iniciar a ingestão");
+        await enqueueJob({ queue, idempotencyKey: `${stage}:${result.videoId}`, payload });
       }
       return result;
     }),
@@ -74,9 +79,15 @@ export const appRouter = router({
     retry: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const result = await startSourceVideoPipeline(ctx.user.id, input.id);
       if (!result) return null;
+      const pipelineDetail = await getPipelineDetail(ctx.user.id, result.videoId);
+      const rawArtifact = pipelineDetail?.artifacts.find(artifact => artifact.artifactType === "raw_video");
+      const sourceUrl = rawArtifact ? await storageGetSignedUrl(rawArtifact.storageKey) : undefined;
       for (const stage of result.stages) {
         const queue = stage === "transcribe" ? "gpu" : stage === "detect_highlights" ? "llm" : "cpu";
-        await enqueueJob({ queue, idempotencyKey: `${stage}:${result.videoId}:retry`, payload: { source_video_id: result.videoId, job_type: stage, owner_id: ctx.user.id, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback` } });
+        const retryKey = `${stage}:${result.videoId}:retry`;
+        const payload = stage === "ingest" ? { job_id: result.videoId, source_video_id: result.videoId, owner_id: ctx.user.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: retryKey } : { source_video_id: result.videoId, job_type: stage, owner_id: ctx.user.id, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback` };
+        if (stage === "ingest" && !sourceUrl) throw new Error("Artefato bruto não encontrado para reprocessar a ingestão");
+        await enqueueJob({ queue, idempotencyKey: retryKey, payload });
       }
       return result;
     }),

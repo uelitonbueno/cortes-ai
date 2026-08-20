@@ -1,5 +1,6 @@
-"""Worker CPU de ingestão: normaliza vídeo e extrai áudio para ASR."""
+"""Consumidor CPU de ingestão: baixa o vídeo, normaliza com FFmpeg, extrai áudio e notifica a API."""
 
+import base64
 import os
 import subprocess
 import tempfile
@@ -13,6 +14,7 @@ from redis import Redis
 class IngestTask(BaseModel):
     job_id: int
     source_video_id: int
+    owner_id: int
     source_url: HttpUrl
     callback_url: HttpUrl
     idempotency_key: str
@@ -36,22 +38,27 @@ def process(task: IngestTask) -> dict:
                         output.write(chunk)
         run_ffmpeg(["-i", str(raw), "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac", "-b:a", "192k", "-r", "30", "-movflags", "+faststart", str(normalized)])
         run_ffmpeg(["-i", str(normalized), "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", str(audio)])
-        return {"normalized_path": str(normalized), "audio_path": str(audio), "normalized_bytes": normalized.stat().st_size, "audio_bytes": audio.stat().st_size}
+        return {"normalizedBase64": base64.b64encode(normalized.read_bytes()).decode("ascii"), "audioBase64": base64.b64encode(audio.read_bytes()).decode("ascii"), "normalizedBytes": normalized.stat().st_size, "audioBytes": audio.stat().st_size}
 
 
 def main() -> None:
     redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
     queue = os.getenv("QUEUE_NAME", "pipeline.cpu")
+    callback_token = os.environ["PIPELINE_CALLBACK_TOKEN"]
     while True:
         _, raw = redis.blpop(queue)
         task = IngestTask.model_validate_json(raw)
         key = f"cortes:idempotency:{task.idempotency_key}"
         if redis.exists(key):
             continue
-        result = process(task)
-        response = requests.post(str(task.callback_url), json={"job_id": task.job_id, "source_video_id": task.source_video_id, "result": result, "idempotency_key": task.idempotency_key}, timeout=120)
-        response.raise_for_status()
-        redis.set(key, "succeeded")
+        try:
+            result = process(task)
+            response = requests.post(str(task.callback_url), json={"jobId": task.job_id, "sourceVideoId": task.source_video_id, "ownerId": task.owner_id, "jobType": "ingest", "status": "succeeded", "idempotencyKey": task.idempotency_key, **result}, headers={"x-pipeline-token": callback_token}, timeout=180)
+            response.raise_for_status()
+            redis.set(key, "succeeded", ex=86400)
+        except Exception as error:
+            requests.post(str(task.callback_url), json={"jobId": task.job_id, "sourceVideoId": task.source_video_id, "ownerId": task.owner_id, "jobType": "ingest", "status": "failed", "idempotencyKey": task.idempotency_key, "errorMessage": str(error)}, headers={"x-pipeline-token": callback_token}, timeout=30)
+            redis.set(key, "failed", ex=86400)
 
 
 if __name__ == "__main__":
