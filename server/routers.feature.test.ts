@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ createSourceVideo: vi.fn(), updateCandidateReview: vi.fn(), listIntegrationSettings: vi.fn(), upsertIntegrationSetting: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createSourceVideo: vi.fn(), updateCandidateReview: vi.fn(), listIntegrationSettings: vi.fn(), upsertIntegrationSetting: vi.fn(), startSourceVideoPipeline: vi.fn(), cancelSourceVideoPipeline: vi.fn() }));
 const { createSourceVideo, updateCandidateReview } = mocks;
 
 vi.mock("./db", () => ({
@@ -8,6 +8,8 @@ vi.mock("./db", () => ({
   updateCandidateReview: mocks.updateCandidateReview,
   listIntegrationSettings: mocks.listIntegrationSettings,
   upsertIntegrationSetting: mocks.upsertIntegrationSetting,
+  startSourceVideoPipeline: mocks.startSourceVideoPipeline,
+  cancelSourceVideoPipeline: mocks.cancelSourceVideoPipeline,
   getAnalyticsSummary: vi.fn(),
   getPipelineDetail: vi.fn(),
   getPipelineOverview: vi.fn(),
@@ -36,6 +38,18 @@ describe("feature mutations", () => {
     const result = await appRouter.createCaller(context()).videos.register({ title: "Podcast", sourceType: "upload", idempotencyKey: "register-12345" });
     expect(createSourceVideo).toHaveBeenCalledWith({ ownerId: 22, title: "Podcast", sourceType: "upload", idempotencyKey: "register-12345" });
     expect(result?.id).toBe(3);
+  });
+
+  it("starts and cancels a pipeline for the authenticated owner", async () => {
+    mocks.startSourceVideoPipeline.mockResolvedValue({ videoId: 3, status: "normalizing", stages: ["ingest", "transcribe", "detect_highlights", "render"] });
+    mocks.cancelSourceVideoPipeline.mockResolvedValue({ videoId: 3, status: "failed" });
+    const caller = appRouter.createCaller(context());
+    expect(await caller.videos.start({ id: 3 })).toMatchObject({ status: "normalizing" });
+    expect(await caller.videos.cancel({ id: 3 })).toEqual({ videoId: 3, status: "failed" });
+    expect(mocks.startSourceVideoPipeline).toHaveBeenCalledWith(22, 3);
+    expect(mocks.cancelSourceVideoPipeline).toHaveBeenCalledWith(22, 3);
+    await caller.videos.retry({ id: 3 });
+    expect(mocks.startSourceVideoPipeline).toHaveBeenCalledWith(22, 3);
   });
 
   it("saves integration settings for the authenticated owner", async () => {

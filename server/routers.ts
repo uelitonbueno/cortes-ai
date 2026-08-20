@@ -11,6 +11,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
   createPipelineAlert,
+  cancelSourceVideoPipeline,
   createSourceVideo,
   getAnalyticsSummary,
   getLatestScoreCalibration,
@@ -25,6 +26,7 @@ import {
   listRecentJobs,
   listReviewCandidates,
   listSourceVideos,
+  startSourceVideoPipeline,
   updateCandidateReview,
 } from "./db";
 
@@ -58,6 +60,25 @@ export const appRouter = router({
       const sourceUrl = await storageGetSignedUrl(stored.key);
       const queue = await enqueueJob({ queue: "cpu", idempotencyKey: `ingest:${source.id}:${input.idempotencyKey}`, payload: { job_id: source.id, source_video_id: source.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: `ingest:${source.id}:${input.idempotencyKey}` } });
       return { source, artifact, queue };
+    }),
+    start: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await startSourceVideoPipeline(ctx.user.id, input.id);
+      if (!result) return null;
+      for (const stage of result.stages) {
+        const queue = stage === "transcribe" ? "gpu" : stage === "detect_highlights" ? "llm" : "cpu";
+        await enqueueJob({ queue, idempotencyKey: `${stage}:${result.videoId}`, payload: { source_video_id: result.videoId, job_type: stage, owner_id: ctx.user.id, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback` } });
+      }
+      return result;
+    }),
+    cancel: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => cancelSourceVideoPipeline(ctx.user.id, input.id)),
+    retry: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await startSourceVideoPipeline(ctx.user.id, input.id);
+      if (!result) return null;
+      for (const stage of result.stages) {
+        const queue = stage === "transcribe" ? "gpu" : stage === "detect_highlights" ? "llm" : "cpu";
+        await enqueueJob({ queue, idempotencyKey: `${stage}:${result.videoId}:retry`, payload: { source_video_id: result.videoId, job_type: stage, owner_id: ctx.user.id, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback` } });
+      }
+      return result;
     }),
     detail: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
       const detail = await getPipelineDetail(ctx.user.id, input.id);

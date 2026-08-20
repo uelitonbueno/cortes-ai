@@ -215,6 +215,17 @@ export async function getAnalyticsSummary(ownerId: number) {
   return { views: Number(row?.views ?? 0), likes: Number(row?.likes ?? 0), comments: Number(row?.comments ?? 0), shares: Number(row?.shares ?? 0), retention: Number(row?.retention ?? 0), publications: Number(row?.publications ?? 0) };
 }
 
+export async function updatePipelineJobFromWorker(input: { jobId: number; sourceVideoId: number; ownerId: number; jobType: "ingest" | "transcribe" | "detect_highlights" | "render"; status: "running" | "succeeded" | "failed"; errorMessage?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const job = await db.select().from(processingJobs).where(and(eq(processingJobs.id, input.jobId), eq(processingJobs.ownerId, input.ownerId), eq(processingJobs.sourceVideoId, input.sourceVideoId))).limit(1);
+  if (!job[0]) return { updated: false, reason: "job_not_found" };
+  await db.update(processingJobs).set({ status: input.status, errorMessage: input.errorMessage ?? null, startedAt: input.status === "running" ? new Date() : job[0].startedAt, completedAt: ["succeeded", "failed"].includes(input.status) ? new Date() : null, updatedAt: new Date() }).where(eq(processingJobs.id, input.jobId));
+  const nextStatus = input.status === "failed" ? "failed" : input.status === "running" ? ({ ingest: "normalizing", transcribe: "transcribing", detect_highlights: "detecting", render: "rendering" } as const)[input.jobType] : ({ ingest: "transcribing", transcribe: "detecting", detect_highlights: "rendering", render: "awaiting_review" } as const)[input.jobType];
+  await db.update(sourceVideos).set({ status: nextStatus, errorMessage: input.errorMessage ?? null, updatedAt: new Date() }).where(and(eq(sourceVideos.id, input.sourceVideoId), eq(sourceVideos.ownerId, input.ownerId)));
+  return { updated: true, status: nextStatus };
+}
+
 export async function completeIngestCallback(input: { jobId: number; sourceVideoId: number; ownerId: number; idempotencyKey: string; normalized?: { storageKey: string; mimeType: string; byteSize: number }; audio?: { storageKey: string; mimeType: string; byteSize: number } }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
@@ -234,6 +245,33 @@ export async function registerArtifact(input: { sourceVideoId: number; ownerId: 
   await db.insert(mediaArtifacts).values(input);
   const result = await db.select().from(mediaArtifacts).where(and(eq(mediaArtifacts.ownerId, input.ownerId), eq(mediaArtifacts.sourceVideoId, input.sourceVideoId), eq(mediaArtifacts.storageKey, input.storageKey))).limit(1);
   return result[0];
+}
+
+export async function cancelSourceVideoPipeline(ownerId: number, sourceVideoId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const rows = await db.select().from(sourceVideos).where(and(eq(sourceVideos.ownerId, ownerId), eq(sourceVideos.id, sourceVideoId))).limit(1);
+  if (!rows[0]) return null;
+  await db.update(processingJobs).set({ status: "cancelled", errorMessage: "Cancelado pelo usuário", updatedAt: new Date() }).where(and(eq(processingJobs.ownerId, ownerId), eq(processingJobs.sourceVideoId, sourceVideoId)));
+  await db.update(sourceVideos).set({ status: "failed", errorMessage: "Pipeline cancelado pelo usuário", updatedAt: new Date() }).where(eq(sourceVideos.id, sourceVideoId));
+  return { videoId: sourceVideoId, status: "failed" as const };
+}
+
+export async function startSourceVideoPipeline(ownerId: number, sourceVideoId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const rows = await db.select().from(sourceVideos).where(and(eq(sourceVideos.ownerId, ownerId), eq(sourceVideos.id, sourceVideoId))).limit(1);
+  const video = rows[0];
+  if (!video) return null;
+  const stages = [
+    { jobType: "ingest" as const, queueName: "pipeline.cpu", idempotencyKey: `ingest:${sourceVideoId}` },
+    { jobType: "transcribe" as const, queueName: "pipeline.gpu", idempotencyKey: `transcribe:${sourceVideoId}` },
+    { jobType: "detect_highlights" as const, queueName: "pipeline.llm", idempotencyKey: `detect:${sourceVideoId}` },
+    { jobType: "render" as const, queueName: "pipeline.cpu", idempotencyKey: `render:${sourceVideoId}` },
+  ];
+  for (const stage of stages) await db.insert(processingJobs).values({ ownerId, sourceVideoId, jobType: stage.jobType, queueName: stage.queueName, status: stage.jobType === "ingest" ? "queued" : "cancelled", idempotencyKey: stage.idempotencyKey }).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  await db.update(sourceVideos).set({ status: "normalizing", errorMessage: null, updatedAt: new Date() }).where(eq(sourceVideos.id, sourceVideoId));
+  return { videoId: sourceVideoId, status: "normalizing" as const, stages: stages.map(stage => stage.jobType) };
 }
 
 export async function createSourceVideo(input: { ownerId: number; title: string; sourceType: "upload" | "youtube" | "twitch" | "live"; originalUrl?: string; idempotencyKey: string }) {

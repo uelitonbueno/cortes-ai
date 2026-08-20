@@ -90,3 +90,11 @@
 - [x] Preservar a extensão segura e evitar colisões/idempotência no caminho final.
 - [x] Adicionar testes para nomes com acentos, espaços e caracteres especiais.
 - [x] Validar typecheck, testes, build e fluxo da tela `/videos` com verificação visual do formulário.
+
+## Controles de geração após upload
+
+- [x] Criar mutation protegida para iniciar o pipeline de um vídeo e enfileirar as etapas CPU/GPU/LLM.
+- [x] Adicionar botão para iniciar geração de cortes na tela de detalhe do vídeo.
+- [x] Adicionar ações para reprocessar, cancelar e atualizar o status do pipeline.
+- [x] Exibir progresso por etapa, jobs recentes e feedback de sucesso/erro com indicador visual derivado dos jobs.
+- [x] Testar mutations, incluindo retry, e validar a tela de detalhe em desktop e mobile.
