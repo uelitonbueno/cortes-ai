@@ -1,0 +1,1 @@
+CREATE INDEX `publications_platform_idx` ON `publications` (`ownerId`,`platform`,`status`);
