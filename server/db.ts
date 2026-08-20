@@ -15,6 +15,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { calculatePerformanceScore } from "./performanceScore";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -98,6 +99,43 @@ export async function listReviewCandidates(ownerId: number) {
   return db.select().from(clipCandidates).where(and(eq(clipCandidates.ownerId, ownerId), eq(clipCandidates.status, "candidate"))).orderBy(desc(clipCandidates.finalScore), desc(clipCandidates.createdAt)).limit(50);
 }
 
+export async function listRankedReviewCandidates(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const candidates = await db.select().from(clipCandidates)
+    .where(and(eq(clipCandidates.ownerId, ownerId), eq(clipCandidates.status, "candidate")))
+    .limit(50);
+  if (candidates.length === 0) return [];
+  const metricRows = await db.select({
+    candidateId: clipCandidates.id,
+    views: metrics.views,
+    likes: metrics.likes,
+    comments: metrics.comments,
+    shares: metrics.shares,
+    retentionRate: metrics.retentionRate,
+  }).from(clipCandidates)
+    .leftJoin(clips, eq(clips.candidateId, clipCandidates.id))
+    .leftJoin(publications, eq(publications.clipId, clips.id))
+    .leftJoin(metrics, eq(metrics.publicationId, publications.id))
+    .where(and(eq(clipCandidates.ownerId, ownerId), eq(clipCandidates.status, "candidate")));
+  const byCandidate = new Map<number, typeof metricRows>();
+  for (const row of metricRows) {
+    const current = byCandidate.get(row.candidateId) ?? [];
+    current.push(row);
+    byCandidate.set(row.candidateId, current);
+  }
+  return candidates.map(candidate => {
+    const scores = (byCandidate.get(candidate.id) ?? []).map(metric => calculatePerformanceScore({
+      editorialScore: candidate.finalScore,
+      views: metric.views,
+      likes: metric.likes,
+      comments: metric.comments,
+      shares: metric.shares,
+      retentionRate: metric.retentionRate,
+    }));
+    return { ...candidate, performanceScore: scores.length ? Math.max(...scores) : candidate.finalScore };
+  }).sort((a, b) => b.performanceScore - a.performanceScore || b.createdAt.getTime() - a.createdAt.getTime());
+}
 export async function getPipelineDetail(ownerId: number, sourceVideoId: number) {
   const db = await getDb();
   if (!db) return null;

@@ -24,7 +24,7 @@ import {
   markAlertRead,
   registerArtifact,
   listRecentJobs,
-  listReviewCandidates,
+  listRankedReviewCandidates,
   listSourceVideos,
   startSourceVideoPipeline,
   updateCandidateReview,
@@ -99,7 +99,7 @@ export const appRouter = router({
     }),
   }),
   review: router({
-    list: protectedProcedure.query(({ ctx }) => listReviewCandidates(ctx.user.id)),
+    list: protectedProcedure.query(({ ctx }) => listRankedReviewCandidates(ctx.user.id)),
     update: protectedProcedure.input(z.object({ id: z.number().int().positive(), status: z.enum(["approved", "rejected"]), rejectionReason: z.string().max(80).optional(), suggestedTitle: z.string().max(255).optional() })).mutation(({ ctx, input }) => updateCandidateReview({ ...input, ownerId: ctx.user.id })),
   }),
   publications: router({

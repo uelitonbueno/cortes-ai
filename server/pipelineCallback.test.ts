@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { pipelineCallback } from "./pipelineCallback";
 
 function responseMock() {
@@ -6,6 +6,7 @@ function responseMock() {
 }
 
 describe("pipeline callback authentication", () => {
+  beforeAll(() => { process.env.PIPELINE_CALLBACK_TOKEN = "test-callback-token"; });
   it("rejects a wrong worker token", async () => {
     const response = responseMock();
     await pipelineCallback({ body: {}, header: () => "wrong-token" } as never, response as never);
@@ -14,7 +15,7 @@ describe("pipeline callback authentication", () => {
 
   it("accepts the configured token before validating payload", async () => {
     const response = responseMock();
-    await pipelineCallback({ body: {}, header: () => process.env.PIPELINE_CALLBACK_TOKEN ?? "" } as never, response as never);
+    await pipelineCallback({ body: {}, header: () => "test-callback-token" } as never, response as never);
     expect(response.statusCode).toBe(400);
   });
 });
