@@ -197,6 +197,19 @@ export const metrics = mysqlTable(
   }),
 );
 
+export const scoreCalibrations = mysqlTable(
+  "score_calibrations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull(),
+    weightsJson: json("weightsJson").notNull(),
+    sampleSize: int("sampleSize").notNull(),
+    modelVersion: varchar("modelVersion", { length: 128 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ calibrationOwnerIdx: index("score_calibrations_owner_idx").on(table.ownerId, table.createdAt) }),
+);
+
 export const alerts = mysqlTable(
   "alerts",
   {

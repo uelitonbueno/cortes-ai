@@ -2,15 +2,23 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
-import { storageGetSignedUrl } from "./storage";
+import { storageGetSignedUrl, storagePut } from "./storage";
+import { notifyOwner } from "./_core/notification";
+import { generateClipMetadata } from "./metadata";
+import { enqueueJob } from "./queue";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
+  createPipelineAlert,
   createSourceVideo,
   getAnalyticsSummary,
+  getLatestScoreCalibration,
   getPipelineDetail,
   getPipelineOverview,
+  listAlerts,
   listPublications,
+  markAlertRead,
+  registerArtifact,
   listRecentJobs,
   listReviewCandidates,
   listSourceVideos,
@@ -36,6 +44,17 @@ export const appRouter = router({
   videos: router({
     list: protectedProcedure.query(({ ctx }) => listSourceVideos(ctx.user.id)),
     register: protectedProcedure.input(z.object({ title: z.string().min(2).max(255), sourceType: z.enum(["upload", "youtube", "twitch", "live"]).default("upload"), originalUrl: z.string().url().optional(), idempotencyKey: z.string().min(8).max(128) })).mutation(({ ctx, input }) => createSourceVideo({ ...input, ownerId: ctx.user.id })),
+    upload: protectedProcedure.input(z.object({ title: z.string().min(2).max(255), fileName: z.string().min(1).max(160), mimeType: z.string().startsWith("video/"), contentBase64: z.string().max(8_000_000), idempotencyKey: z.string().min(8).max(128) })).mutation(async ({ ctx, input }) => {
+      const source = await createSourceVideo({ ownerId: ctx.user.id, title: input.title, sourceType: "upload", idempotencyKey: input.idempotencyKey });
+      if (!source) throw new Error("Não foi possível registrar o vídeo");
+      const content = Buffer.from(input.contentBase64, "base64");
+      if (content.byteLength > 6 * 1024 * 1024) throw new Error("Arquivo acima do limite da primeira versão");
+      const stored = await storagePut(`owners/${ctx.user.id}/sources/${source.id}/${input.fileName}`, content, input.mimeType);
+      const artifact = await registerArtifact({ sourceVideoId: source.id, ownerId: ctx.user.id, artifactType: "raw_video", storageKey: stored.key, mimeType: input.mimeType, byteSize: content.byteLength });
+      const sourceUrl = await storageGetSignedUrl(stored.key);
+      const queue = await enqueueJob({ queue: "cpu", idempotencyKey: `ingest:${source.id}:${input.idempotencyKey}`, payload: { job_id: source.id, source_video_id: source.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: `ingest:${source.id}:${input.idempotencyKey}` } });
+      return { source, artifact, queue };
+    }),
     detail: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
       const detail = await getPipelineDetail(ctx.user.id, input.id);
       if (!detail) return null;
@@ -51,10 +70,24 @@ export const appRouter = router({
     list: protectedProcedure.query(({ ctx }) => listPublications(ctx.user.id)),
     platforms: protectedProcedure.query(() => platformSchema.options),
   }),
+  pipeline: router({
+    reportEvent: protectedProcedure.input(z.object({ event: z.enum(["review_ready", "publication_failed", "score_anomaly", "pipeline_failed"]), entityType: z.string().max(40).optional(), entityId: z.number().int().positive().optional(), title: z.string().min(3).max(255), message: z.string().min(3).max(2000) })).mutation(async ({ ctx, input }) => {
+      const severity = input.event === "pipeline_failed" || input.event === "publication_failed" ? "critical" : input.event === "score_anomaly" ? "warning" : "info";
+      const alert = await createPipelineAlert({ ownerId: ctx.user.id, alertType: input.event, severity, title: input.title, message: input.message, entityType: input.entityType, entityId: input.entityId });
+      await notifyOwner({ title: input.title, content: input.message });
+      return alert;
+    }),
+  }),
+  alerts: router({
+    list: protectedProcedure.query(({ ctx }) => listAlerts(ctx.user.id)),
+    markRead: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => markAlertRead(ctx.user.id, input.id)),
+  }),
   analytics: router({
     summary: protectedProcedure.query(({ ctx }) => getAnalyticsSummary(ctx.user.id)),
+    latestCalibration: protectedProcedure.query(({ ctx }) => getLatestScoreCalibration(ctx.user.id)),
   }),
   ai: router({
+    generateMetadata: protectedProcedure.input(z.object({ transcript: z.string().min(20).max(30000), category: z.string().max(40) })).mutation(({ input }) => generateClipMetadata(input.transcript, input.category)),
     detectHighlightsPreview: protectedProcedure.input(z.object({ transcriptChunk: z.string().min(20).max(30000), language: z.string().default("pt-BR") })).mutation(async ({ input }) => {
       const response = await invokeLLM({
         messages: [

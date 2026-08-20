@@ -3,9 +3,9 @@
 ## Fundação e arquitetura
 
 - [x] Definir contratos compartilhados de pipeline, estados, tipos de tarefa e idempotência.
-- [ ] Documentar separação futura entre API web, workers CPU, workers GPU e workers LLM.
+- [x] Documentar separação futura entre API web, workers CPU, workers GPU e workers LLM.
 - [x] Definir estratégia de armazenamento S3/R2 com referências de artefatos e URLs temporárias.
-- [ ] Registrar arquitetura de evolução para workers Python via Dockerfile customizado.
+- [x] Registrar arquitetura de evolução para workers Python via Dockerfile customizado.
 
 ## Dados e rastreabilidade
 
@@ -22,28 +22,28 @@
 - [x] Implementar lista de vídeos com progresso por estado e erros recentes.
 - [x] Implementar fila de revisão humana com score, categoria, título, duração e ações.
 - [x] Implementar aprovação, rejeição com motivo e edição de metadados.
-- [ ] Implementar tela de detalhe do pipeline com histórico de tarefas e artefatos.
+- [x] Implementar tela de detalhe do pipeline com histórico de tarefas e artefatos.
 - [x] Implementar placeholders controlados para preview assinado e renderização real.
 
 ## Pipeline e IA
 
-- [ ] Implementar ingestão lógica com normalização, extração de áudio e criação de job.
-- [ ] Implementar contrato de transcrição com timestamps por palavra e diarização futura.
-- [ ] Implementar divisão da transcrição em janelas com overlap.
+- [x] Implementar ingestão lógica com normalização, extração de áudio e criação de job.
+- [x] Implementar contrato de transcrição com timestamps por palavra e diarização futura.
+- [x] Implementar divisão da transcrição em janelas com overlap.
 - [x] Implementar contrato de highlights com JSON validado por schema.
 - [x] Implementar cálculo de score combinado e pós-processamento de sobreposição.
-- [ ] Implementar contrato de renderização vertical e legendas ASS karaokê.
-- [ ] Implementar geração de thumbnail e metadados como etapas desacopladas.
-- [ ] Implementar notificações ao owner para revisão, falhas de publicação e score anômalo.
+- [x] Implementar contrato de renderização vertical e legendas ASS karaokê.
+- [x] Implementar geração de thumbnail e metadados como etapas desacopladas.
+- [x] Implementar notificações ao owner para revisão, falhas de publicação e score anômalo.
 
 ## Publicação e analytics
 
 - [x] Criar modelo de publicação por plataforma com agendamento e cadência.
-- [ ] Preparar integração segura com YouTube Shorts, TikTok e Instagram Reels.
+- [x] Preparar integração segura com YouTube Shorts, TikTok e Instagram Reels.
 - [x] Implementar estados de publicação, retry e idempotência.
 - [x] Criar modelo de métricas pós-publicação.
 - [x] Implementar dashboard de performance por plataforma, categoria, horário e corte.
-- [ ] Implementar recalibração futura dos pesos do score com dados de desempenho.
+- [x] Implementar recalibração futura dos pesos do score com dados de desempenho.
 
 ## Qualidade e operação
 
@@ -58,12 +58,21 @@
 - [x] Criar entidade ou documentar formalmente a decisão de manter segmentos dentro de `transcripts.segmentsJson`.
 - [x] Adicionar índice específico por plataforma em publicações.
 - [x] Implementar helper de detalhe do pipeline com jobs e artefatos.
-- [ ] Exibir progresso por etapa e erros recentes na tela de vídeos.
+- [x] Exibir progresso por etapa e erros recentes na tela de vídeos.
 - [x] Implementar preview com URL assinada real quando houver artefato de mídia.
-- [ ] Adicionar pós-processamento para remover ou mesclar candidatos sobrepostos.
-- [ ] Implementar testes Vitest para `videos.register` e `review.update`.
+- [x] Implementar pós-processamento para remover ou mesclar candidatos sobrepostos.
+- [x] Implementar testes Vitest para `videos.register` e `review.update`.
 - [x] Executar `pnpm build` e validar telas com viewport mobile.
 - [x] Criar documento da versão 1 com limitações atuais e roadmap de workers/Docker/publicação.
 
 - [x] Implementar tela de detalhe/preview consumindo `videos.detail` e renderizando mídia com URL assinada quando houver artefatos.
 - [x] Salvar checkpoint real da primeira entrega após a validação final.
+
+## Evolução avançada em andamento
+
+- [ ] Implementar callback autenticado dos workers para persistir artefatos normalizados e áudio.
+- [ ] Criar jobs persistidos de metadata e thumbnail vinculados aos clips.
+- [ ] Substituir adaptadores de publicação por conectores OAuth reais das três plataformas.
+- [ ] Criar job periódico de analytics e aplicar pesos recalibrados ao detector.
+- [x] Enfileirar upload no Redis com chave de idempotência e segregação CPU/GPU/LLM.
+- [x] Adicionar worker CPU Docker com FFmpeg e worker GPU Python com faster-whisper.

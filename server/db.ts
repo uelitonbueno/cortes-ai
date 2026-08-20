@@ -7,6 +7,7 @@ import {
   InsertUser,
   metrics,
   mediaArtifacts,
+  scoreCalibrations,
   processingJobs,
   publications,
   sourceVideos,
@@ -115,6 +116,27 @@ export async function listRecentJobs(ownerId: number) {
   return db.select().from(processingJobs).where(eq(processingJobs.ownerId, ownerId)).orderBy(desc(processingJobs.createdAt)).limit(20);
 }
 
+export async function createPipelineAlert(input: { ownerId: number; alertType: "review_ready" | "publication_failed" | "score_anomaly" | "pipeline_failed"; severity: "info" | "warning" | "critical"; title: string; message: string; entityType?: string; entityId?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(alerts).values(input);
+  const result = await db.select().from(alerts).where(and(eq(alerts.ownerId, input.ownerId), eq(alerts.title, input.title))).orderBy(desc(alerts.createdAt)).limit(1);
+  return result[0];
+}
+
+export async function listAlerts(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(alerts).where(eq(alerts.ownerId, ownerId)).orderBy(desc(alerts.createdAt)).limit(50);
+}
+
+export async function markAlertRead(ownerId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(alerts).set({ readAt: new Date() }).where(and(eq(alerts.ownerId, ownerId), eq(alerts.id, id)));
+  return { success: true };
+}
+
 export async function listPublications(ownerId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -139,6 +161,21 @@ export async function updateCandidateReview(input: {
   return { ...candidate[0], status: input.status };
 }
 
+export async function saveScoreCalibration(input: { ownerId: number; weights: { llm: number; audio: number; chat: number }; sampleSize: number; modelVersion?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(scoreCalibrations).values({ ownerId: input.ownerId, weightsJson: input.weights, sampleSize: input.sampleSize, modelVersion: input.modelVersion ?? "v1" });
+  const rows = await db.select().from(scoreCalibrations).where(eq(scoreCalibrations.ownerId, input.ownerId)).orderBy(desc(scoreCalibrations.createdAt)).limit(1);
+  return rows[0];
+}
+
+export async function getLatestScoreCalibration(ownerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(scoreCalibrations).where(eq(scoreCalibrations.ownerId, ownerId)).orderBy(desc(scoreCalibrations.createdAt)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getAnalyticsSummary(ownerId: number) {
   const db = await getDb();
   if (!db) return { views: 0, likes: 0, comments: 0, shares: 0, retention: 0, publications: 0 };
@@ -147,10 +184,22 @@ export async function getAnalyticsSummary(ownerId: number) {
   return { views: Number(row?.views ?? 0), likes: Number(row?.likes ?? 0), comments: Number(row?.comments ?? 0), shares: Number(row?.shares ?? 0), retention: Number(row?.retention ?? 0), publications: Number(row?.publications ?? 0) };
 }
 
+export async function registerArtifact(input: { sourceVideoId: number; ownerId: number; artifactType: "raw_video" | "normalized_video" | "audio" | "clip" | "vertical_clip" | "captioned_clip" | "thumbnail" | "captions"; storageKey: string; mimeType: string; byteSize: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(mediaArtifacts).values(input);
+  const result = await db.select().from(mediaArtifacts).where(and(eq(mediaArtifacts.ownerId, input.ownerId), eq(mediaArtifacts.sourceVideoId, input.sourceVideoId), eq(mediaArtifacts.storageKey, input.storageKey))).limit(1);
+  return result[0];
+}
+
 export async function createSourceVideo(input: { ownerId: number; title: string; sourceType: "upload" | "youtube" | "twitch" | "live"; originalUrl?: string; idempotencyKey: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(sourceVideos).values({ ...input, status: "uploaded" });
   const result = await db.select().from(sourceVideos).where(and(eq(sourceVideos.ownerId, input.ownerId), eq(sourceVideos.idempotencyKey, input.idempotencyKey))).limit(1);
-  return result[0];
+  const source = result[0];
+  if (source) {
+    await db.insert(processingJobs).values({ ownerId: input.ownerId, sourceVideoId: source.id, jobType: "ingest", queueName: "pipeline.cpu", status: "queued", idempotencyKey: `ingest:${input.idempotencyKey}` }).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  }
+  return source;
 }
