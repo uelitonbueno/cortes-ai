@@ -3,12 +3,125 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { CalendarClock, ExternalLink, Instagram, Music2, Youtube } from "lucide-react";
+import {
+  CalendarClock,
+  ExternalLink,
+  Instagram,
+  Music2,
+  Youtube,
+} from "lucide-react";
 
-const platformIcon = { youtube: Youtube, tiktok: Music2, instagram: Instagram } as const;
-const statusLabel: Record<string, string> = { draft: "Rascunho", scheduled: "Agendado", publishing: "Publicando", published: "Publicado", failed: "Falhou", cancelled: "Cancelado" };
+const platformIcon = {
+  youtube: Youtube,
+  tiktok: Music2,
+  instagram: Instagram,
+} as const;
+const statusLabel: Record<string, string> = {
+  draft: "Rascunho",
+  scheduled: "Agendado",
+  publishing: "Publicando",
+  published: "Publicado",
+  failed: "Falhou",
+  cancelled: "Cancelado",
+};
 
 export default function Publications() {
   const publications = trpc.publications.list.useQuery();
-  return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><div><p className="text-sm font-medium uppercase tracking-[0.18em] text-cyan-700">Distribuição</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Publicações</h1><p className="mt-2 text-slate-500">Acompanhe agendamentos, tentativas e resultados por plataforma.</p></div><Card className="border-0 bg-white shadow-sm shadow-slate-200/70"><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle className="text-lg">Fila multicanal</CardTitle><p className="mt-1 text-sm text-slate-500">A publicação automática será ativada após configurar as credenciais de cada plataforma.</p></div><Button variant="outline" disabled><CalendarClock className="mr-2 h-4 w-4" />Agendar</Button></CardHeader><CardContent>{publications.isLoading ? <p className="text-sm text-slate-500">Carregando publicações...</p> : publications.data?.length ? <div className="space-y-3">{publications.data.map(publication => { const Icon = platformIcon[publication.platform]; return <div key={publication.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-3 text-slate-600"><Icon className="h-5 w-5" /></div><div><p className="font-medium capitalize text-slate-800">{publication.platform}</p><p className="mt-1 text-xs text-slate-500">{publication.scheduledAt ? new Date(publication.scheduledAt).toLocaleString("pt-BR") : "Sem horário definido"}</p></div></div><div className="flex items-center gap-3"><Badge variant={publication.status === "failed" ? "destructive" : "secondary"}>{statusLabel[publication.status] ?? publication.status}</Badge>{publication.platformVideoId && <Button size="icon" variant="ghost"><ExternalLink className="h-4 w-4" /></Button>}</div></div> })}</div> : <div className="rounded-2xl border border-dashed border-slate-200 p-12 text-center"><CalendarClock className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 font-medium text-slate-800">Nenhuma publicação na fila</p><p className="mt-1 text-sm text-slate-500">Cortes aprovados poderão ser agendados para YouTube, TikTok e Instagram.</p></div>}</CardContent></Card></div></DashboardLayout>;
+  return (
+    <DashboardLayout>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div>
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-cyan-700">
+            Distribuição
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+            Publicações
+          </h1>
+          <p className="mt-2 text-slate-500">
+            Acompanhe agendamentos, tentativas e resultados por plataforma.
+          </p>
+        </div>
+        <Card className="border-0 bg-white shadow-sm shadow-slate-200/70">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Fila multicanal</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">
+                A publicação automática será ativada após configurar as
+                credenciais de cada plataforma.
+              </p>
+            </div>
+            <Button variant="outline" disabled>
+              <CalendarClock className="mr-2 h-4 w-4" />
+              Agendar
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {publications.isLoading ? (
+              <p className="text-sm text-slate-500">
+                Carregando publicações...
+              </p>
+            ) : publications.data?.length ? (
+              <div className="space-y-3">
+                {publications.data.map(publication => {
+                  const Icon = platformIcon[publication.platform];
+                  return (
+                    <div
+                      key={publication.id}
+                      className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-xl bg-slate-100 p-3 text-slate-600">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium capitalize text-slate-800">
+                            {publication.platform}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {publication.scheduledAt
+                              ? new Date(
+                                  publication.scheduledAt
+                                ).toLocaleString("pt-BR")
+                              : "Sem horário definido"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge
+                          variant={
+                            publication.status === "failed"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                        >
+                          {statusLabel[publication.status] ??
+                            publication.status}
+                        </Badge>
+                        {publication.platformVideoId && (
+                          <Button size="icon" variant="ghost">
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-12 text-center">
+                <CalendarClock className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-3 font-medium text-slate-800">
+                  Nenhuma publicação na fila
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Cortes aprovados poderão ser agendados para YouTube, TikTok e
+                  Instagram.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
 }

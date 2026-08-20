@@ -21,10 +21,19 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, CalendarClock, Film, LayoutDashboard, ListVideo, LogOut, PanelLeft, Settings2 } from "lucide-react";
+import {
+  BarChart3,
+  CalendarClock,
+  Film,
+  LayoutDashboard,
+  ListVideo,
+  LogOut,
+  PanelLeft,
+  Settings2,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const menuItems = [
@@ -57,7 +66,7 @@ export default function DashboardLayout({
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
@@ -69,7 +78,8 @@ export default function DashboardLayout({
               Acesse o Cortes AI
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Entre para acompanhar seus vídeos, cortes, publicações e métricas em um único lugar.
+              Entre para acompanhar seus vídeos, cortes, publicações e métricas
+              em um único lugar.
             </p>
           </div>
           <Button

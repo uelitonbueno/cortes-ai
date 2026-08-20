@@ -30,14 +30,29 @@ export const sourceVideos = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     ownerId: int("ownerId").notNull(),
     title: varchar("title", { length: 255 }).notNull(),
-    sourceType: mysqlEnum("sourceType", ["upload", "youtube", "twitch", "live"]).default("upload").notNull(),
+    sourceType: mysqlEnum("sourceType", ["upload", "youtube", "twitch", "live"])
+      .default("upload")
+      .notNull(),
     originalUrl: text("originalUrl"),
-    status: mysqlEnum("status", ["uploaded", "normalizing", "transcribing", "detecting", "rendering", "awaiting_review", "completed", "failed"]).default("uploaded").notNull(),
+    status: mysqlEnum("status", [
+      "uploaded",
+      "normalizing",
+      "transcribing",
+      "detecting",
+      "rendering",
+      "awaiting_review",
+      "completed",
+      "failed",
+    ])
+      .default("uploaded")
+      .notNull(),
     durationSeconds: int("durationSeconds"),
     resolution: varchar("resolution", { length: 32 }),
     fps: int("fps"),
     language: varchar("language", { length: 10 }).default("pt"),
-    processingVersion: varchar("processingVersion", { length: 64 }).default("v1"),
+    processingVersion: varchar("processingVersion", { length: 64 }).default(
+      "v1"
+    ),
     retryCount: int("retryCount").default(0).notNull(),
     errorMessage: text("errorMessage"),
     idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
@@ -45,9 +60,14 @@ export const sourceVideos = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    ownerStatusIdx: index("source_videos_owner_status_idx").on(table.ownerId, table.status),
-    idempotencyIdx: uniqueIndex("source_videos_idempotency_idx").on(table.idempotencyKey),
-  }),
+    ownerStatusIdx: index("source_videos_owner_status_idx").on(
+      table.ownerId,
+      table.status
+    ),
+    idempotencyIdx: uniqueIndex("source_videos_idempotency_idx").on(
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const mediaArtifacts = mysqlTable(
@@ -56,7 +76,16 @@ export const mediaArtifacts = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     sourceVideoId: int("sourceVideoId"),
     ownerId: int("ownerId").notNull(),
-    artifactType: mysqlEnum("artifactType", ["raw_video", "normalized_video", "audio", "clip", "vertical_clip", "captioned_clip", "thumbnail", "captions"]).notNull(),
+    artifactType: mysqlEnum("artifactType", [
+      "raw_video",
+      "normalized_video",
+      "audio",
+      "clip",
+      "vertical_clip",
+      "captioned_clip",
+      "thumbnail",
+      "captions",
+    ]).notNull(),
     storageKey: varchar("storageKey", { length: 512 }).notNull(),
     mimeType: varchar("mimeType", { length: 120 }).notNull(),
     byteSize: bigint("byteSize", { mode: "number" }),
@@ -64,8 +93,11 @@ export const mediaArtifacts = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    sourceTypeIdx: index("artifacts_source_type_idx").on(table.sourceVideoId, table.artifactType),
-  }),
+    sourceTypeIdx: index("artifacts_source_type_idx").on(
+      table.sourceVideoId,
+      table.artifactType
+    ),
+  })
 );
 
 export const processingJobs = mysqlTable(
@@ -76,9 +108,27 @@ export const processingJobs = mysqlTable(
     sourceVideoId: int("sourceVideoId"),
     candidateId: int("candidateId"),
     clipId: int("clipId"),
-    jobType: mysqlEnum("jobType", ["ingest", "transcribe", "detect_highlights", "render", "thumbnail", "metadata", "publish", "collect_metrics", "recalibrate"]).notNull(),
+    jobType: mysqlEnum("jobType", [
+      "ingest",
+      "transcribe",
+      "detect_highlights",
+      "render",
+      "thumbnail",
+      "metadata",
+      "publish",
+      "collect_metrics",
+      "recalibrate",
+    ]).notNull(),
     queueName: varchar("queueName", { length: 64 }).notNull(),
-    status: mysqlEnum("status", ["queued", "running", "succeeded", "failed", "cancelled"]).default("queued").notNull(),
+    status: mysqlEnum("status", [
+      "queued",
+      "running",
+      "succeeded",
+      "failed",
+      "cancelled",
+    ])
+      .default("queued")
+      .notNull(),
     retryCount: int("retryCount").default(0).notNull(),
     maxRetries: int("maxRetries").default(3).notNull(),
     errorMessage: text("errorMessage"),
@@ -91,9 +141,14 @@ export const processingJobs = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    queueStatusIdx: index("jobs_queue_status_idx").on(table.queueName, table.status),
-    jobIdempotencyIdx: uniqueIndex("jobs_idempotency_idx").on(table.idempotencyKey),
-  }),
+    queueStatusIdx: index("jobs_queue_status_idx").on(
+      table.queueName,
+      table.status
+    ),
+    jobIdempotencyIdx: uniqueIndex("jobs_idempotency_idx").on(
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const transcripts = mysqlTable(
@@ -110,8 +165,10 @@ export const transcripts = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    transcriptSourceIdx: index("transcripts_source_idx").on(table.sourceVideoId),
-  }),
+    transcriptSourceIdx: index("transcripts_source_idx").on(
+      table.sourceVideoId
+    ),
+  })
 );
 
 export const clipCandidates = mysqlTable(
@@ -130,7 +187,17 @@ export const clipCandidates = mysqlTable(
     hookText: varchar("hookText", { length: 255 }),
     reasoning: text("reasoning"),
     suggestedTitle: varchar("suggestedTitle", { length: 255 }),
-    status: mysqlEnum("status", ["candidate", "approved", "rejected", "rendering", "ready", "scheduled", "published"]).default("candidate").notNull(),
+    status: mysqlEnum("status", [
+      "candidate",
+      "approved",
+      "rejected",
+      "rendering",
+      "ready",
+      "scheduled",
+      "published",
+    ])
+      .default("candidate")
+      .notNull(),
     rejectionReason: varchar("rejectionReason", { length: 80 }),
     modelVersion: varchar("modelVersion", { length: 128 }),
     promptVersion: varchar("promptVersion", { length: 64 }),
@@ -138,8 +205,12 @@ export const clipCandidates = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    reviewIdx: index("candidates_review_idx").on(table.ownerId, table.status, table.finalScore),
-  }),
+    reviewIdx: index("candidates_review_idx").on(
+      table.ownerId,
+      table.status,
+      table.finalScore
+    ),
+  })
 );
 
 export const clips = mysqlTable("clips", {
@@ -149,7 +220,17 @@ export const clips = mysqlTable("clips", {
   title: varchar("title", { length: 255 }),
   description: text("description"),
   hashtagsJson: json("hashtagsJson"),
-  status: mysqlEnum("status", ["draft", "rendering", "ready", "approved", "rejected", "scheduled", "published"]).default("draft").notNull(),
+  status: mysqlEnum("status", [
+    "draft",
+    "rendering",
+    "ready",
+    "approved",
+    "rejected",
+    "scheduled",
+    "published",
+  ])
+    .default("draft")
+    .notNull(),
   reviewedBy: int("reviewedBy"),
   rejectionReason: varchar("rejectionReason", { length: 80 }),
   approvedAt: timestamp("approvedAt"),
@@ -163,9 +244,22 @@ export const publications = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     clipId: int("clipId").notNull(),
     ownerId: int("ownerId").notNull(),
-    platform: mysqlEnum("platform", ["youtube", "tiktok", "instagram"]).notNull(),
+    platform: mysqlEnum("platform", [
+      "youtube",
+      "tiktok",
+      "instagram",
+    ]).notNull(),
     platformVideoId: varchar("platformVideoId", { length: 255 }),
-    status: mysqlEnum("status", ["draft", "scheduled", "publishing", "published", "failed", "cancelled"]).default("draft").notNull(),
+    status: mysqlEnum("status", [
+      "draft",
+      "scheduled",
+      "publishing",
+      "published",
+      "failed",
+      "cancelled",
+    ])
+      .default("draft")
+      .notNull(),
     scheduledAt: timestamp("scheduledAt"),
     publishedAt: timestamp("publishedAt"),
     retryCount: int("retryCount").default(0).notNull(),
@@ -175,10 +269,20 @@ export const publications = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    publicationScheduleIdx: index("publications_schedule_idx").on(table.ownerId, table.status, table.scheduledAt),
-    publicationPlatformIdx: index("publications_platform_idx").on(table.ownerId, table.platform, table.status),
-    publicationIdempotencyIdx: uniqueIndex("publications_idempotency_idx").on(table.idempotencyKey),
-  }),
+    publicationScheduleIdx: index("publications_schedule_idx").on(
+      table.ownerId,
+      table.status,
+      table.scheduledAt
+    ),
+    publicationPlatformIdx: index("publications_platform_idx").on(
+      table.ownerId,
+      table.platform,
+      table.status
+    ),
+    publicationIdempotencyIdx: uniqueIndex("publications_idempotency_idx").on(
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const metrics = mysqlTable(
@@ -195,8 +299,11 @@ export const metrics = mysqlTable(
     collectedAt: timestamp("collectedAt").defaultNow().notNull(),
   },
   table => ({
-    metricsPublicationIdx: index("metrics_publication_idx").on(table.publicationId, table.collectedAt),
-  }),
+    metricsPublicationIdx: index("metrics_publication_idx").on(
+      table.publicationId,
+      table.collectedAt
+    ),
+  })
 );
 
 export const integrationSettings = mysqlTable(
@@ -204,14 +311,22 @@ export const integrationSettings = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     ownerId: int("ownerId").notNull(),
-    platform: mysqlEnum("platform", ["youtube", "tiktok", "instagram"]).notNull(),
+    platform: mysqlEnum("platform", [
+      "youtube",
+      "tiktok",
+      "instagram",
+    ]).notNull(),
     accessToken: text("accessToken"),
     publishEndpoint: varchar("publishEndpoint", { length: 512 }),
     enabled: boolean("enabled").default(false).notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ integrationOwnerPlatformIdx: uniqueIndex("integration_owner_platform_idx").on(table.ownerId, table.platform) }),
+  table => ({
+    integrationOwnerPlatformIdx: uniqueIndex(
+      "integration_owner_platform_idx"
+    ).on(table.ownerId, table.platform),
+  })
 );
 
 export const scoreCalibrations = mysqlTable(
@@ -224,7 +339,12 @@ export const scoreCalibrations = mysqlTable(
     modelVersion: varchar("modelVersion", { length: 128 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ calibrationOwnerIdx: index("score_calibrations_owner_idx").on(table.ownerId, table.createdAt) }),
+  table => ({
+    calibrationOwnerIdx: index("score_calibrations_owner_idx").on(
+      table.ownerId,
+      table.createdAt
+    ),
+  })
 );
 
 export const alerts = mysqlTable(
@@ -232,8 +352,15 @@ export const alerts = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     ownerId: int("ownerId").notNull(),
-    alertType: mysqlEnum("alertType", ["review_ready", "publication_failed", "score_anomaly", "pipeline_failed"]).notNull(),
-    severity: mysqlEnum("severity", ["info", "warning", "critical"]).default("info").notNull(),
+    alertType: mysqlEnum("alertType", [
+      "review_ready",
+      "publication_failed",
+      "score_anomaly",
+      "pipeline_failed",
+    ]).notNull(),
+    severity: mysqlEnum("severity", ["info", "warning", "critical"])
+      .default("info")
+      .notNull(),
     title: varchar("title", { length: 255 }).notNull(),
     message: text("message").notNull(),
     entityType: varchar("entityType", { length: 40 }),
@@ -242,8 +369,11 @@ export const alerts = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    ownerReadIdx: index("alerts_owner_read_idx").on(table.ownerId, table.readAt),
-  }),
+    ownerReadIdx: index("alerts_owner_read_idx").on(
+      table.ownerId,
+      table.readAt
+    ),
+  })
 );
 
 export type User = typeof users.$inferSelect;

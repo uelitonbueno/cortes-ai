@@ -1,13 +1,40 @@
 import { createIdempotencyKey, isPublicationAllowed } from "../shared/pipeline";
 
 export type PlatformName = "youtube" | "tiktok" | "instagram";
-export type PublishRequest = { platform: PlatformName; clipId: number; mediaUrl: string; title: string; description: string; hashtags: string[]; scheduledAt: Date; lastScheduledAt?: Date | null };
+export type PublishRequest = {
+  platform: PlatformName;
+  clipId: number;
+  mediaUrl: string;
+  title: string;
+  description: string;
+  hashtags: string[];
+  scheduledAt: Date;
+  lastScheduledAt?: Date | null;
+};
 
-export type PublishResult = { status: "published" | "scheduled" | "blocked"; platform: PlatformName; externalId?: string; idempotencyKey: string; reason?: string };
+export type PublishResult = {
+  status: "published" | "scheduled" | "blocked";
+  platform: PlatformName;
+  externalId?: string;
+  idempotencyKey: string;
+  reason?: string;
+};
 
 export function createPublishRequest(input: PublishRequest): PublishResult {
-  const idempotencyKey = createIdempotencyKey([input.platform, input.clipId, input.scheduledAt.toISOString()]);
-  if (!isPublicationAllowed(input.lastScheduledAt ?? null, input.scheduledAt, 60)) return { status: "blocked", platform: input.platform, idempotencyKey, reason: "minimum_cadence_gap" };
+  const idempotencyKey = createIdempotencyKey([
+    input.platform,
+    input.clipId,
+    input.scheduledAt.toISOString(),
+  ]);
+  if (
+    !isPublicationAllowed(input.lastScheduledAt ?? null, input.scheduledAt, 60)
+  )
+    return {
+      status: "blocked",
+      platform: input.platform,
+      idempotencyKey,
+      reason: "minimum_cadence_gap",
+    };
   return { status: "scheduled", platform: input.platform, idempotencyKey };
 }
 
@@ -22,7 +49,9 @@ export class CredentialedPlatformPublisher implements PlatformPublisher {
   async publish(input: PublishRequest): Promise<PublishResult> {
     const request = createPublishRequest(input);
     if (request.status === "blocked") return request;
-    throw new Error(`${this.platform} credentials are not configured; publication remains scheduled`);
+    throw new Error(
+      `${this.platform} credentials are not configured; publication remains scheduled`
+    );
   }
 }
 

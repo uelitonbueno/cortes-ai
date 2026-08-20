@@ -15,5 +15,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+    setupFiles: [
+      path.resolve(templateRoot, "server/__tests__/vitest.setup.ts"),
+    ],
   },
 });

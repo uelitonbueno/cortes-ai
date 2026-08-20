@@ -13,9 +13,30 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 function Router() {
-  return <Switch><Route path="/" component={Home} /><Route path="/videos" component={Videos} /><Route path="/videos/:id" component={PipelineDetail} /><Route path="/review" component={Review} /><Route path="/publications" component={Publications} /><Route path="/analytics" component={Analytics} /><Route path="/settings" component={SettingsIntegrations} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
+  return (
+    <Switch>
+      <Route path="/" component={Home} />
+      <Route path="/videos" component={Videos} />
+      <Route path="/videos/:id" component={PipelineDetail} />
+      <Route path="/review" component={Review} />
+      <Route path="/publications" component={Publications} />
+      <Route path="/analytics" component={Analytics} />
+      <Route path="/settings" component={SettingsIntegrations} />
+      <Route path="/404" component={NotFound} />
+      <Route component={NotFound} />
+    </Switch>
+  );
 }
 
 export default function App() {
-  return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="light">
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
 }
