@@ -70,9 +70,16 @@
 
 ## Evolução avançada em andamento
 
-- [ ] Implementar callback autenticado dos workers para persistir artefatos normalizados e áudio.
-- [ ] Criar jobs persistidos de metadata e thumbnail vinculados aos clips.
+- [x] Implementar callback autenticado dos workers para persistir artefatos normalizados e áudio.
+- [x] Criar jobs persistidos de metadata e thumbnail vinculados aos clips.
 - [ ] Substituir adaptadores de publicação por conectores OAuth reais das três plataformas.
 - [ ] Criar job periódico de analytics e aplicar pesos recalibrados ao detector.
 - [x] Enfileirar upload no Redis com chave de idempotência e segregação CPU/GPU/LLM.
 - [x] Adicionar worker CPU Docker com FFmpeg e worker GPU Python com faster-whisper.
+
+## Configurações de integrações
+
+- [x] Criar menu Configurações com seção de integrações de publicação.
+- [x] Implementar formulário para endpoints e credenciais de YouTube, TikTok e Instagram sem exibir valores completos.
+- [x] Persistir configurações de integração com proteção por usuário e publicação desativada por padrão.
+- [x] Adicionar testes de leitura mascarada, atualização e bloqueio quando credenciais não estão configuradas.

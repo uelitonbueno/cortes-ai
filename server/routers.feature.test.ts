@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ createSourceVideo: vi.fn(), updateCandidateReview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createSourceVideo: vi.fn(), updateCandidateReview: vi.fn(), listIntegrationSettings: vi.fn(), upsertIntegrationSetting: vi.fn() }));
 const { createSourceVideo, updateCandidateReview } = mocks;
 
 vi.mock("./db", () => ({
   createSourceVideo: mocks.createSourceVideo,
   updateCandidateReview: mocks.updateCandidateReview,
+  listIntegrationSettings: mocks.listIntegrationSettings,
+  upsertIntegrationSetting: mocks.upsertIntegrationSetting,
   getAnalyticsSummary: vi.fn(),
   getPipelineDetail: vi.fn(),
   getPipelineOverview: vi.fn(),
@@ -34,6 +36,13 @@ describe("feature mutations", () => {
     const result = await appRouter.createCaller(context()).videos.register({ title: "Podcast", sourceType: "upload", idempotencyKey: "register-12345" });
     expect(createSourceVideo).toHaveBeenCalledWith({ ownerId: 22, title: "Podcast", sourceType: "upload", idempotencyKey: "register-12345" });
     expect(result?.id).toBe(3);
+  });
+
+  it("saves integration settings for the authenticated owner", async () => {
+    mocks.upsertIntegrationSetting.mockResolvedValue({ platform: "youtube", enabled: false, accessToken: "abcd••••mnop" });
+    const result = await appRouter.createCaller(context()).integrations.save({ platform: "youtube", accessToken: "abcdefghijklmnop", publishEndpoint: "https://gateway.example/publish", enabled: false });
+    expect(mocks.upsertIntegrationSetting).toHaveBeenCalledWith({ ownerId: 22, platform: "youtube", accessToken: "abcdefghijklmnop", publishEndpoint: "https://gateway.example/publish", enabled: false });
+    expect(result?.accessToken).toContain("••••");
   });
 
   it("records an approval decision for a candidate", async () => {

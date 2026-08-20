@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateGeneratedMetadata } from "../shared/content";
 import { createPublishRequest } from "./platforms";
 import { recalibrateWeights } from "../shared/analytics";
+import { platformCredentialKey, publishWithConnector } from "./platform-connectors";
 import { buildAssKaraoke, combinedHighlightScore, createIdempotencyKey, createVerticalRenderRequest, isPublicationAllowed, isValidTransition, removeOverlappingCandidates, splitTranscriptWindows, verticalRenderFilter } from "../shared/pipeline";
 
 describe("pipeline contracts", () => {
@@ -54,6 +55,18 @@ describe("pipeline contracts", () => {
     expect(result.description.length).toBeLessThanOrEqual(500);
     expect(result.hashtags).toEqual(["#cortes", "ia"]);
     expect(result.thumbnailText).toBe("TEXTO CHAMATIVO");
+  });
+
+  it("blocks publication when connector credentials are missing", async () => {
+    delete process.env.YOUTUBE_ACCESS_TOKEN;
+    delete process.env.YOUTUBE_PUBLISH_ENDPOINT;
+    await expect(publishWithConnector({ platform: "youtube", clipId: 7, mediaUrl: "https://storage.example/clip.mp4", title: "Corte", description: "Descrição", hashtags: [], scheduledAt: new Date("2026-08-20T11:00:00Z") })).rejects.toThrow("YOUTUBE_ACCESS_TOKEN is not configured");
+  });
+
+  it("maps every publication platform to an isolated credential", () => {
+    expect(platformCredentialKey("youtube")).toBe("YOUTUBE_ACCESS_TOKEN");
+    expect(platformCredentialKey("tiktok")).toBe("TIKTOK_ACCESS_TOKEN");
+    expect(platformCredentialKey("instagram")).toBe("INSTAGRAM_ACCESS_TOKEN");
   });
 
   it("recalibrates weights only with sufficient observations", () => {

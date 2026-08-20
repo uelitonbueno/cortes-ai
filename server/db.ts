@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   alerts,
+  integrationSettings,
   clipCandidates,
   clips,
   InsertUser,
@@ -124,6 +125,29 @@ export async function createPipelineAlert(input: { ownerId: number; alertType: "
   return result[0];
 }
 
+export function maskIntegrationSecret(value?: string | null) {
+  if (!value) return null;
+  return value.length <= 8 ? "••••••••" : `${value.slice(0, 4)}••••${value.slice(-4)}`;
+}
+
+export async function listIntegrationSettings(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(integrationSettings).where(eq(integrationSettings.ownerId, ownerId));
+  return rows.map(row => ({ ...row, accessToken: maskIntegrationSecret(row.accessToken) }));
+}
+
+export async function upsertIntegrationSetting(input: { ownerId: number; platform: "youtube" | "tiktok" | "instagram"; accessToken?: string; publishEndpoint?: string; enabled?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const existing = await db.select().from(integrationSettings).where(and(eq(integrationSettings.ownerId, input.ownerId), eq(integrationSettings.platform, input.platform))).limit(1);
+  const values = { ownerId: input.ownerId, platform: input.platform, ...(input.accessToken ? { accessToken: input.accessToken } : {}), publishEndpoint: input.publishEndpoint ?? null, enabled: input.enabled ?? false };
+  if (existing[0]) await db.update(integrationSettings).set(values).where(eq(integrationSettings.id, existing[0].id));
+  else await db.insert(integrationSettings).values(values);
+  const saved = await db.select().from(integrationSettings).where(and(eq(integrationSettings.ownerId, input.ownerId), eq(integrationSettings.platform, input.platform))).limit(1);
+  return saved[0] ? { ...saved[0], accessToken: maskIntegrationSecret(saved[0].accessToken) } : null;
+}
+
 export async function listAlerts(ownerId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -156,7 +180,14 @@ export async function updateCandidateReview(input: {
   if (!candidate[0]) return null;
   await db.update(clipCandidates).set({ status: input.status, rejectionReason: input.rejectionReason ?? null, suggestedTitle: input.suggestedTitle ?? candidate[0].suggestedTitle }).where(eq(clipCandidates.id, input.id));
   if (input.status === "approved") {
-    await db.insert(clips).values({ candidateId: input.id, ownerId: input.ownerId, title: input.suggestedTitle ?? candidate[0].suggestedTitle, status: "ready" });
+    await db.insert(clips).values({ candidateId: input.id, ownerId: input.ownerId, title: input.suggestedTitle ?? candidate[0].suggestedTitle, status: "rendering" });
+    const clip = await db.select().from(clips).where(and(eq(clips.candidateId, input.id), eq(clips.ownerId, input.ownerId))).orderBy(desc(clips.createdAt)).limit(1);
+    if (clip[0]) {
+      await db.insert(processingJobs).values([
+        { ownerId: input.ownerId, sourceVideoId: candidate[0].sourceVideoId, candidateId: input.id, clipId: clip[0].id, jobType: "metadata", queueName: "pipeline.llm", status: "queued", idempotencyKey: `metadata:clip:${clip[0].id}` },
+        { ownerId: input.ownerId, sourceVideoId: candidate[0].sourceVideoId, candidateId: input.id, clipId: clip[0].id, jobType: "thumbnail", queueName: "pipeline.cpu", status: "queued", idempotencyKey: `thumbnail:clip:${clip[0].id}` },
+      ]);
+    }
   }
   return { ...candidate[0], status: input.status };
 }
@@ -182,6 +213,19 @@ export async function getAnalyticsSummary(ownerId: number) {
   const rows = await db.select({ views: sql<number>`coalesce(sum(${metrics.views}), 0)`, likes: sql<number>`coalesce(sum(${metrics.likes}), 0)`, comments: sql<number>`coalesce(sum(${metrics.comments}), 0)`, shares: sql<number>`coalesce(sum(${metrics.shares}), 0)`, retention: sql<number>`coalesce(avg(${metrics.retentionRate}), 0)`, publications: sql<number>`count(distinct ${publications.id})` }).from(metrics).innerJoin(publications, eq(metrics.publicationId, publications.id)).where(eq(publications.ownerId, ownerId));
   const row = rows[0];
   return { views: Number(row?.views ?? 0), likes: Number(row?.likes ?? 0), comments: Number(row?.comments ?? 0), shares: Number(row?.shares ?? 0), retention: Number(row?.retention ?? 0), publications: Number(row?.publications ?? 0) };
+}
+
+export async function completeIngestCallback(input: { jobId: number; sourceVideoId: number; ownerId: number; idempotencyKey: string; normalized?: { storageKey: string; mimeType: string; byteSize: number }; audio?: { storageKey: string; mimeType: string; byteSize: number } }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const job = await db.select().from(processingJobs).where(and(eq(processingJobs.id, input.jobId), eq(processingJobs.ownerId, input.ownerId), eq(processingJobs.idempotencyKey, input.idempotencyKey))).limit(1);
+  if (!job[0]) return { updated: false, reason: "job_not_found" };
+  if (job[0].status === "succeeded") return { updated: false, duplicate: true };
+  if (input.normalized) await db.insert(mediaArtifacts).values({ sourceVideoId: input.sourceVideoId, ownerId: input.ownerId, artifactType: "normalized_video", storageKey: input.normalized.storageKey, mimeType: input.normalized.mimeType, byteSize: input.normalized.byteSize, processingVersion: "v1" });
+  if (input.audio) await db.insert(mediaArtifacts).values({ sourceVideoId: input.sourceVideoId, ownerId: input.ownerId, artifactType: "audio", storageKey: input.audio.storageKey, mimeType: input.audio.mimeType, byteSize: input.audio.byteSize, processingVersion: "v1" });
+  await db.update(processingJobs).set({ status: "succeeded", completedAt: new Date(), updatedAt: new Date() }).where(eq(processingJobs.id, input.jobId));
+  await db.update(sourceVideos).set({ status: "transcribing", updatedAt: new Date() }).where(and(eq(sourceVideos.id, input.sourceVideoId), eq(sourceVideos.ownerId, input.ownerId)));
+  return { updated: true };
 }
 
 export async function registerArtifact(input: { sourceVideoId: number; ownerId: number; artifactType: "raw_video" | "normalized_video" | "audio" | "clip" | "vertical_clip" | "captioned_clip" | "thumbnail" | "captions"; storageKey: string; mimeType: string; byteSize: number }) {

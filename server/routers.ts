@@ -16,7 +16,9 @@ import {
   getPipelineDetail,
   getPipelineOverview,
   listAlerts,
+  listIntegrationSettings,
   listPublications,
+  upsertIntegrationSetting,
   markAlertRead,
   registerArtifact,
   listRecentJobs,
@@ -77,6 +79,10 @@ export const appRouter = router({
       await notifyOwner({ title: input.title, content: input.message });
       return alert;
     }),
+  }),
+  integrations: router({
+    list: protectedProcedure.query(({ ctx }) => listIntegrationSettings(ctx.user.id)),
+    save: protectedProcedure.input(z.object({ platform: z.enum(["youtube", "tiktok", "instagram"]), accessToken: z.string().max(10000).optional(), publishEndpoint: z.string().url().optional().or(z.literal("")), enabled: z.boolean().default(false) })).mutation(({ ctx, input }) => upsertIntegrationSetting({ ...input, publishEndpoint: input.publishEndpoint || undefined, ownerId: ctx.user.id })),
   }),
   alerts: router({
     list: protectedProcedure.query(({ ctx }) => listAlerts(ctx.user.id)),

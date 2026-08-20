@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   index,
   int,
   json,
@@ -74,6 +75,7 @@ export const processingJobs = mysqlTable(
     ownerId: int("ownerId").notNull(),
     sourceVideoId: int("sourceVideoId"),
     candidateId: int("candidateId"),
+    clipId: int("clipId"),
     jobType: mysqlEnum("jobType", ["ingest", "transcribe", "detect_highlights", "render", "thumbnail", "metadata", "publish", "collect_metrics", "recalibrate"]).notNull(),
     queueName: varchar("queueName", { length: 64 }).notNull(),
     status: mysqlEnum("status", ["queued", "running", "succeeded", "failed", "cancelled"]).default("queued").notNull(),
@@ -195,6 +197,21 @@ export const metrics = mysqlTable(
   table => ({
     metricsPublicationIdx: index("metrics_publication_idx").on(table.publicationId, table.collectedAt),
   }),
+);
+
+export const integrationSettings = mysqlTable(
+  "integration_settings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull(),
+    platform: mysqlEnum("platform", ["youtube", "tiktok", "instagram"]).notNull(),
+    accessToken: text("accessToken"),
+    publishEndpoint: varchar("publishEndpoint", { length: 512 }),
+    enabled: boolean("enabled").default(false).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ integrationOwnerPlatformIdx: uniqueIndex("integration_owner_platform_idx").on(table.ownerId, table.platform) }),
 );
 
 export const scoreCalibrations = mysqlTable(
