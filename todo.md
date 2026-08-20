@@ -115,7 +115,7 @@
 
 ## Sincronização GitHub
 
-- [ ] Verificar remoto, branch e diferenças do repositório `uelitonbueno/cortes-ai`.
-- [ ] Corrigir pendências locais que impeçam a sincronização.
-- [ ] Executar validações antes do commit.
-- [ ] Enviar a versão atual ao GitHub e confirmar o commit remoto.
+- [x] Verificar remoto, branch e diferenças do repositório `uelitonbueno/cortes-ai`.
+- [x] Corrigir pendências locais que impeçam a sincronização.
+- [x] Executar validações antes do commit.
+- [x] Enviar a versão atual ao GitHub e confirmar o commit remoto.
