@@ -6,6 +6,7 @@ import { storageGetSignedUrl, storagePut } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import { generateClipMetadata } from "./metadata";
 import { enqueueJob } from "./queue";
+import { sanitizeStorageFileName } from "../shared/storage";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
@@ -51,7 +52,8 @@ export const appRouter = router({
       if (!source) throw new Error("Não foi possível registrar o vídeo");
       const content = Buffer.from(input.contentBase64, "base64");
       if (content.byteLength > 6 * 1024 * 1024) throw new Error("Arquivo acima do limite da primeira versão");
-      const stored = await storagePut(`owners/${ctx.user.id}/sources/${source.id}/${input.fileName}`, content, input.mimeType);
+      const safeFileName = sanitizeStorageFileName(input.fileName);
+      const stored = await storagePut(`owners/${ctx.user.id}/sources/${source.id}/${safeFileName}`, content, input.mimeType);
       const artifact = await registerArtifact({ sourceVideoId: source.id, ownerId: ctx.user.id, artifactType: "raw_video", storageKey: stored.key, mimeType: input.mimeType, byteSize: content.byteLength });
       const sourceUrl = await storageGetSignedUrl(stored.key);
       const queue = await enqueueJob({ queue: "cpu", idempotencyKey: `ingest:${source.id}:${input.idempotencyKey}`, payload: { job_id: source.id, source_video_id: source.id, source_url: sourceUrl, callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`, idempotency_key: `ingest:${source.id}:${input.idempotencyKey}` } });

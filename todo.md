@@ -83,3 +83,10 @@
 - [x] Implementar formulário para endpoints e credenciais de YouTube, TikTok e Instagram sem exibir valores completos.
 - [x] Persistir configurações de integração com proteção por usuário e publicação desativada por padrão.
 - [x] Adicionar testes de leitura mascarada, atualização e bloqueio quando credenciais não estão configuradas.
+
+## Correção de upload
+
+- [x] Sanitizar nomes de arquivo para caminhos ASCII antes de chamar o storage.
+- [x] Preservar a extensão segura e evitar colisões/idempotência no caminho final.
+- [x] Adicionar testes para nomes com acentos, espaços e caracteres especiais.
+- [x] Validar typecheck, testes, build e fluxo da tela `/videos` com verificação visual do formulário.
