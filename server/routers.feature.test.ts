@@ -69,6 +69,7 @@ describe("feature mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getPipelineDetail.mockResolvedValue({
+      video: { id: 3, sourceType: "upload" },
       artifacts: [
         { artifactType: "raw_video", storageKey: "owners/22/raw.mp4" },
       ],
