@@ -5,6 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { Film, Plus, UploadCloud, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
@@ -55,6 +62,10 @@ export default function Videos() {
     onError: error => toast.error(error.message),
   });
   const [title, setTitle] = useState("");
+  const [sourceType, setSourceType] = useState<
+    "upload" | "youtube" | "twitch" | "live" | "gdrive" | "kick"
+  >("upload");
+  const [originalUrl, setOriginalUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const encodeFile = (selected: File) =>
     new Promise<string>((resolve, reject) => {
@@ -76,7 +87,8 @@ export default function Videos() {
     } else {
       register.mutate({
         title: title.trim(),
-        sourceType: "upload",
+        sourceType,
+        originalUrl: originalUrl.trim() || undefined,
         idempotencyKey: `register-${crypto.randomUUID()}`,
       });
     }
@@ -105,25 +117,69 @@ export default function Videos() {
                 <UploadCloud className="h-4 w-4" />
                 <span className="text-sm font-medium">Novo vídeo</span>
               </div>
-              <Label
-                htmlFor="video-title"
-                className="mt-4 block text-slate-300"
-              >
-                Nome de identificação
-              </Label>
-              <Input
-                id="video-title"
-                value={title}
-                onChange={event => setTitle(event.target.value)}
-                placeholder="Ex.: Podcast episódio 12"
-                className="mt-2 max-w-xl border-white/15 bg-white/10 text-white placeholder:text-slate-400"
-              />
-              <Input
-                type="file"
-                accept="video/*"
-                onChange={event => setFile(event.target.files?.[0] ?? null)}
-                className="mt-3 max-w-xl border-white/15 bg-white/10 text-white file:text-cyan-200"
-              />
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:items-end">
+                <div>
+                  <Label htmlFor="video-title" className="block text-slate-300">
+                    Nome de identificação
+                  </Label>
+                  <Input
+                    id="video-title"
+                    value={title}
+                    onChange={event => setTitle(event.target.value)}
+                    placeholder="Ex.: Podcast episódio 12"
+                    className="mt-2 border-white/15 bg-white/10 text-white placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="source-type" className="block text-slate-300">
+                    Origem do vídeo
+                  </Label>
+                  <Select
+                    value={sourceType}
+                    onValueChange={(v: any) => setSourceType(v)}
+                  >
+                    <SelectTrigger className="mt-2 border-white/15 bg-white/10 text-white">
+                      <SelectValue placeholder="Selecione a origem" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="upload">Upload de arquivo</SelectItem>
+                      <SelectItem value="youtube">YouTube</SelectItem>
+                      <SelectItem value="twitch">Twitch</SelectItem>
+                      <SelectItem value="gdrive">Google Drive</SelectItem>
+                      <SelectItem value="kick">Kick</SelectItem>
+                      <SelectItem value="live">Live Stream (URL)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {sourceType === "upload" ? (
+                <div className="mt-3">
+                  <Label htmlFor="file-upload" className="block text-slate-300">
+                    Arquivo de vídeo
+                  </Label>
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    accept="video/*"
+                    onChange={event => setFile(event.target.files?.[0] ?? null)}
+                    className="mt-2 max-w-xl border-white/15 bg-white/10 text-white file:text-cyan-200"
+                  />
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <Label htmlFor="source-url" className="block text-slate-300">
+                    URL da fonte ({sourceType})
+                  </Label>
+                  <Input
+                    id="source-url"
+                    value={originalUrl}
+                    onChange={event => setOriginalUrl(event.target.value)}
+                    placeholder="https://..."
+                    className="mt-2 max-w-xl border-white/15 bg-white/10 text-white placeholder:text-slate-400"
+                  />
+                </div>
+              )}
             </div>
             <Button
               disabled={

@@ -55,7 +55,7 @@ export const appRouter = router({
         z.object({
           title: z.string().min(2).max(255),
           sourceType: z
-            .enum(["upload", "youtube", "twitch", "live"])
+            .enum(["upload", "youtube", "twitch", "live", "gdrive", "kick"])
             .default("upload"),
           originalUrl: z.string().url().optional(),
           idempotencyKey: z.string().min(8).max(128),
@@ -108,6 +108,7 @@ export const appRouter = router({
             source_video_id: source.id,
             owner_id: ctx.user.id,
             source_url: sourceUrl,
+            source_type: "upload",
             callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`,
             idempotency_key: `ingest:${source.id}:${input.idempotencyKey}`,
           },
@@ -143,6 +144,7 @@ export const appRouter = router({
                   source_video_id: result.videoId,
                   owner_id: ctx.user.id,
                   source_url: sourceUrl,
+                  source_type: pipelineDetail?.video.sourceType,
                   callback_url: `${process.env.PUBLIC_APP_URL ?? "http://localhost"}/api/pipeline/callback`,
                   idempotency_key: `${stage}:${result.videoId}`,
                 }

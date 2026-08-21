@@ -30,7 +30,7 @@ export const sourceVideos = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     ownerId: int("ownerId").notNull(),
     title: varchar("title", { length: 255 }).notNull(),
-    sourceType: mysqlEnum("sourceType", ["upload", "youtube", "twitch", "live"])
+    sourceType: mysqlEnum("sourceType", ["upload", "youtube", "twitch", "live", "gdrive", "kick"])
       .default("upload")
       .notNull(),
     originalUrl: text("originalUrl"),

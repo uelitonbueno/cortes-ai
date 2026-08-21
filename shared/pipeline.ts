@@ -11,6 +11,9 @@ export const PIPELINE_STATES = [
 ] as const;
 export type PipelineState = (typeof PIPELINE_STATES)[number];
 
+export const SOURCE_TYPES = ["upload", "youtube", "twitch", "live", "gdrive", "kick"] as const;
+export type SourceType = (typeof SOURCE_TYPES)[number];
+
 export const QUEUES = {
   cpu: "pipeline.cpu",
   gpu: "pipeline.gpu",
@@ -64,11 +67,12 @@ export function normalizeScore(value: number) {
 }
 
 export function combinedHighlightScore(
-  signals: { llm: number; audio?: number; chat?: number },
-  weights = { llm: 0.6, audio: 0.2, chat: 0.2 }
+  signals: { llm: number; audio?: number; chat?: number; vision?: number },
+  weights = { llm: 0.5, vision: 0.2, audio: 0.15, chat: 0.15 }
 ) {
   return normalizeScore(
     signals.llm * weights.llm +
+      (signals.vision ?? 0) * weights.vision +
       (signals.audio ?? 0) * weights.audio +
       (signals.chat ?? 0) * weights.chat
   );
