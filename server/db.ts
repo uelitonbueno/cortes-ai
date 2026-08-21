@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { SourceType } from "../shared/pipeline";
 import {
   alerts,
   integrationSettings,
@@ -418,7 +419,7 @@ export async function updateCandidateReview(input: {
 
 export async function saveScoreCalibration(input: {
   ownerId: number;
-  weights: { llm: number; audio: number; chat: number };
+  weights: { llm: number; vision?: number; audio: number; chat: number };
   sampleSize: number;
   modelVersion?: string;
 }) {
@@ -758,7 +759,7 @@ export async function startSourceVideoPipeline(
 export async function createSourceVideo(input: {
   ownerId: number;
   title: string;
-  sourceType: "upload" | "youtube" | "twitch" | "live";
+  sourceType: SourceType;
   originalUrl?: string;
   idempotencyKey: string;
 }) {
