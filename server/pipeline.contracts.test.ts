@@ -20,7 +20,12 @@ import {
 
 describe("pipeline contracts", () => {
   it("combines signals and clamps the result to 0-100", () => {
-    expect(combinedHighlightScore({ llm: 90, audio: 70, chat: 50 })).toBe(78);
+    // Pesos: llm: 0.5, vision: 0.2, audio: 0.15, chat: 0.15
+    // 90*0.5 + 0*0.2 + 70*0.15 + 50*0.15 = 45 + 0 + 10.5 + 7.5 = 63
+    expect(combinedHighlightScore({ llm: 90, audio: 70, chat: 50 })).toBe(63);
+    expect(
+      combinedHighlightScore({ llm: 90, vision: 80, audio: 70, chat: 50 })
+    ).toBe(79);
     expect(combinedHighlightScore({ llm: 200, audio: 200, chat: 200 })).toBe(
       100
     );
