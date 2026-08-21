@@ -54,6 +54,9 @@ export type VerticalRenderRequest = {
   height: 1920;
   cropMode: "center" | "face_tracking" | "speaker_tracking";
   captionsArtifactKey?: string;
+  brandKitId?: number;
+  templateId?: number;
+  watermarkArtifactKey?: string;
 };
 
 export function createVerticalRenderRequest(

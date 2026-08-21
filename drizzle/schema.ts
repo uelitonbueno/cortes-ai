@@ -132,6 +132,7 @@ export const processingJobs = mysqlTable(
     retryCount: int("retryCount").default(0).notNull(),
     maxRetries: int("maxRetries").default(3).notNull(),
     errorMessage: text("errorMessage"),
+    metadata: json("metadata"),
     modelVersion: varchar("modelVersion", { length: 128 }),
     promptVersion: varchar("promptVersion", { length: 64 }),
     idempotencyKey: varchar("idempotencyKey", { length: 160 }).notNull(),
@@ -381,3 +382,41 @@ export type InsertUser = typeof users.$inferInsert;
 export type SourceVideo = typeof sourceVideos.$inferSelect;
 export type ClipCandidate = typeof clipCandidates.$inferSelect;
 export type ProcessingJob = typeof processingJobs.$inferSelect;
+
+export const brandKits = mysqlTable(
+  "brand_kits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    logoArtifactId: int("logoArtifactId"),
+    primaryColor: varchar("primaryColor", { length: 7 }).default("#00d7ff"),
+    secondaryColor: varchar("secondaryColor", { length: 7 }).default("#ffffff"),
+    fontFamily: varchar("fontFamily", { length: 100 }).default("Arial"),
+    isDefault: boolean("isDefault").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ownerIdx: index("brand_kits_owner_idx").on(table.ownerId),
+  })
+);
+
+export const captionTemplates = mysqlTable(
+  "caption_templates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    styleJson: json("styleJson").notNull(), // ASS style parameters: Fontname, Fontsize, PrimaryColour, etc.
+    isDefault: boolean("isDefault").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ownerIdx: index("caption_templates_owner_idx").on(table.ownerId),
+  })
+);
+
+export type BrandKit = typeof brandKits.$inferSelect;
+export type CaptionTemplate = typeof captionTemplates.$inferSelect;

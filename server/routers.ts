@@ -28,6 +28,10 @@ import {
   listSourceVideos,
   startSourceVideoPipeline,
   updateCandidateReview,
+  listBrandKits,
+  listCaptionTemplates,
+  upsertBrandKit,
+  bulkApproveCandidates,
 } from "./db";
 
 const platformSchema = z.enum(["youtube", "tiktok", "instagram"]);
@@ -248,6 +252,39 @@ export const appRouter = router({
       .mutation(({ ctx, input }) =>
         updateCandidateReview({ ...input, ownerId: ctx.user.id })
       ),
+    bulkApprove: protectedProcedure
+      .input(
+        z.object({
+          candidateIds: z.array(z.number().int().positive()),
+          brandKitId: z.number().int().positive().optional(),
+          templateId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        bulkApproveCandidates({ ...input, ownerId: ctx.user.id })
+      ),
+  }),
+  brandKits: router({
+    list: protectedProcedure.query(({ ctx }) => listBrandKits(ctx.user.id)),
+    save: protectedProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive().optional(),
+          name: z.string().min(2).max(100),
+          primaryColor: z.string().length(7).optional(),
+          secondaryColor: z.string().length(7).optional(),
+          fontFamily: z.string().max(100).optional(),
+          isDefault: z.boolean().default(false),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        upsertBrandKit({ ...input, ownerId: ctx.user.id })
+      ),
+  }),
+  templates: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      listCaptionTemplates(ctx.user.id)
+    ),
   }),
   publications: router({
     list: protectedProcedure.query(({ ctx }) => listPublications(ctx.user.id)),

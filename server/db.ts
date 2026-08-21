@@ -14,6 +14,8 @@ import {
   publications,
   sourceVideos,
   users,
+  brandKits,
+  captionTemplates,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -350,6 +352,8 @@ export async function updateCandidateReview(input: {
   status: "approved" | "rejected";
   rejectionReason?: string;
   suggestedTitle?: string;
+  brandKitId?: number;
+  templateId?: number;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
@@ -400,6 +404,10 @@ export async function updateCandidateReview(input: {
           queueName: "pipeline.llm",
           status: "queued",
           idempotencyKey: `metadata:clip:${clip[0].id}`,
+          metadata: {
+            brandKitId: input.brandKitId,
+            templateId: input.templateId,
+          },
         },
         {
           ownerId: input.ownerId,
@@ -410,6 +418,10 @@ export async function updateCandidateReview(input: {
           queueName: "pipeline.cpu",
           status: "queued",
           idempotencyKey: `thumbnail:clip:${clip[0].id}`,
+          metadata: {
+            brandKitId: input.brandKitId,
+            templateId: input.templateId,
+          },
         },
       ]);
     }
@@ -791,4 +803,69 @@ export async function createSourceVideo(input: {
       .onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
   }
   return source;
+}
+
+export async function listBrandKits(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(brandKits)
+    .where(eq(brandKits.ownerId, ownerId))
+    .orderBy(desc(brandKits.isDefault), desc(brandKits.createdAt));
+}
+
+export async function listCaptionTemplates(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(captionTemplates)
+    .where(eq(captionTemplates.ownerId, ownerId))
+    .orderBy(desc(captionTemplates.isDefault), desc(captionTemplates.createdAt));
+}
+
+export async function upsertBrandKit(input: {
+  id?: number;
+  ownerId: number;
+  name: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontFamily?: string;
+  isDefault?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  
+  if (input.isDefault) {
+    await db.update(brandKits).set({ isDefault: false }).where(eq(brandKits.ownerId, input.ownerId));
+  }
+
+  if (input.id) {
+    await db.update(brandKits).set(input).where(and(eq(brandKits.id, input.id), eq(brandKits.ownerId, input.ownerId)));
+    return input;
+  } else {
+    await db.insert(brandKits).values(input);
+    return input;
+  }
+}
+
+export async function bulkApproveCandidates(input: {
+  ownerId: number;
+  candidateIds: number[];
+  brandKitId?: number;
+  templateId?: number;
+}) {
+  const results = [];
+  for (const id of input.candidateIds) {
+    const res = await updateCandidateReview({
+      id,
+      ownerId: input.ownerId,
+      status: "approved",
+      brandKitId: input.brandKitId,
+      templateId: input.templateId,
+    });
+    results.push(res);
+  }
+  return results;
 }
