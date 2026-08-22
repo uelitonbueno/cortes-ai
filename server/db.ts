@@ -16,6 +16,8 @@ import {
   users,
   brandKits,
   captionTemplates,
+  userWallets,
+  creditTransactions,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -385,46 +387,55 @@ export async function updateCandidateReview(input: {
         title: input.suggestedTitle ?? candidate[0].suggestedTitle,
         status: "rendering",
       });
-    const clip = await db
-      .select()
-      .from(clips)
-      .where(
-        and(eq(clips.candidateId, input.id), eq(clips.ownerId, input.ownerId))
-      )
-      .orderBy(desc(clips.createdAt))
-      .limit(1);
-    if (clip[0]) {
-      await db.insert(processingJobs).values([
-        {
-          ownerId: input.ownerId,
-          sourceVideoId: candidate[0].sourceVideoId,
-          candidateId: input.id,
-          clipId: clip[0].id,
-          jobType: "metadata",
-          queueName: "pipeline.llm",
-          status: "queued",
-          idempotencyKey: `metadata:clip:${clip[0].id}`,
-          metadata: {
-            brandKitId: input.brandKitId,
-            templateId: input.templateId,
-          },
+  const clip = await db
+    .select()
+    .from(clips)
+    .where(
+      and(eq(clips.ownerId, input.ownerId), eq(clips.candidateId, input.id))
+    )
+    .orderBy(desc(clips.createdAt))
+    .limit(1);
+  if (clip[0]) {
+    // Fase 4: Consumir créditos por renderização de clip
+    await consumeCredits({
+      ownerId: input.ownerId,
+      amount: 5, // Custo por clip aprovado
+      type: "consumption",
+      description: `Renderização do clip: ${input.suggestedTitle || "Corte"}`,
+      referenceEntity: "clip",
+      referenceId: clip[0].id,
+    });
+
+    await db.insert(processingJobs).values([
+      {
+        ownerId: input.ownerId,
+        sourceVideoId: candidate[0].sourceVideoId,
+        candidateId: input.id,
+        clipId: clip[0].id,
+        jobType: "metadata",
+        queueName: "pipeline.llm",
+        status: "queued",
+        idempotencyKey: `metadata:clip:${clip[0].id}`,
+        metadata: {
+          brandKitId: input.brandKitId,
+          templateId: input.templateId,
         },
-        {
-          ownerId: input.ownerId,
-          sourceVideoId: candidate[0].sourceVideoId,
-          candidateId: input.id,
-          clipId: clip[0].id,
-          jobType: "thumbnail",
-          queueName: "pipeline.cpu",
-          status: "queued",
-          idempotencyKey: `thumbnail:clip:${clip[0].id}`,
-          metadata: {
-            brandKitId: input.brandKitId,
-            templateId: input.templateId,
-          },
+      },
+      {
+        ownerId: input.ownerId,
+        sourceVideoId: candidate[0].sourceVideoId,
+        candidateId: input.id,
+        clipId: clip[0].id,
+        jobType: "thumbnail",
+        queueName: "pipeline.cpu",
+        status: "queued",
+        idempotencyKey: `thumbnail:clip:${clip[0].id}`,
+        metadata: {
+          brandKitId: input.brandKitId,
+          templateId: input.templateId,
         },
-      ]);
-    }
+      },
+    ]);
   }
   return { ...candidate[0], status: input.status };
 }
@@ -725,6 +736,20 @@ export async function startSourceVideoPipeline(
     .limit(1);
   const video = rows[0];
   if (!video) return null;
+
+  // Fase 4: Verificar créditos e limites
+  const limits = await checkPlanLimits(ownerId, video.durationSeconds || 0);
+  if (!limits.allowed) throw new Error(`Limite do plano excedido: ${limits.reason}`);
+
+  await consumeCredits({
+    ownerId,
+    amount: 10, // Custo base por pipeline
+    type: "consumption",
+    description: `Processamento do vídeo: ${video.title}`,
+    referenceEntity: "source_video",
+    referenceId: sourceVideoId,
+  });
+
   const stages = [
     {
       jobType: "ingest" as const,
@@ -875,4 +900,152 @@ export async function bulkApproveCandidates(input: {
     results.push(res);
   }
   return results;
+}
+
+export const PLAN_LIMITS = {
+  free: { maxVideoDuration: 1800, maxClipsPerVideo: 5, priority: 0 },
+  pro: { maxVideoDuration: 36000, maxClipsPerVideo: 50, priority: 1 },
+  enterprise: { maxVideoDuration: 86400, maxClipsPerVideo: 200, priority: 2 },
+} as const;
+
+export async function getUserWallet(ownerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(userWallets).where(eq(userWallets.ownerId, ownerId)).limit(1);
+  if (result[0]) return result[0];
+  
+  // Criar carteira inicial se não existir
+  const initial = { ownerId, creditsBalance: 100, planType: "free" as const };
+  await db.insert(userWallets).values(initial);
+  return { ...initial, id: 0, createdAt: new Date(), updatedAt: new Date(), planExpiresAt: null, referralCode: null, referredBy: null };
+}
+
+export async function consumeCredits(input: {
+  ownerId: number;
+  amount: number;
+  type: "consumption";
+  description: string;
+  referenceEntity?: string;
+  referenceId?: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  
+  const wallet = await getUserWallet(input.ownerId);
+  if (!wallet || wallet.creditsBalance < input.amount) {
+    throw new Error("Créditos insuficientes");
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.update(userWallets)
+      .set({ creditsBalance: sql`${userWallets.creditsBalance} - ${input.amount}` })
+      .where(eq(userWallets.ownerId, input.ownerId));
+    
+    await tx.insert(creditTransactions).values({
+      ownerId: input.ownerId,
+      amount: -input.amount,
+      type: input.type,
+      description: input.description,
+      referenceEntity: input.referenceEntity,
+      referenceId: input.referenceId,
+    });
+  });
+
+  return { success: true, remaining: wallet.creditsBalance - input.amount };
+}
+
+export async function checkPlanLimits(ownerId: number, videoDuration: number) {
+  const wallet = await getUserWallet(ownerId);
+  if (!wallet) return { allowed: false, reason: "wallet_not_found" };
+  
+  const limits = PLAN_LIMITS[wallet.planType];
+  if (videoDuration > limits.maxVideoDuration) {
+    return { allowed: false, reason: "duration_limit_exceeded", limit: limits.maxVideoDuration };
+  }
+  
+  return { allowed: true, plan: wallet.planType };
+}
+
+export async function listCreditTransactions(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(creditTransactions)
+    .where(eq(creditTransactions.ownerId, ownerId))
+    .orderBy(desc(creditTransactions.createdAt))
+    .limit(50);
+}
+
+export async function getInfrastructureStats() {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const [jobStats] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      failed: sql<number>`count(case when status = 'failed' then 1 end)`,
+      queued: sql<number>`count(case when status = 'queued' then 1 end)`,
+    })
+    .from(processingJobs);
+
+  const [videoStats] = await db
+    .select({
+      totalVideos: sql<number>`count(*)`,
+      totalDuration: sql<number>`sum(${sourceVideos.durationSeconds})`,
+    })
+    .from(sourceVideos);
+
+  return {
+    jobs: jobStats,
+    videos: videoStats,
+    timestamp: new Date(),
+  };
+}
+
+export async function processReferral(code: string, newUserId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const referrer = await db.select().from(userWallets).where(eq(userWallets.referralCode, code)).limit(1);
+  if (!referrer[0]) return null;
+
+  await db.transaction(async (tx) => {
+    // Atualizar novo usuário
+    await tx.update(userWallets)
+      .set({ referredBy: referrer[0].ownerId, creditsBalance: sql`${userWallets.creditsBalance} + 50` })
+      .where(eq(userWallets.ownerId, newUserId));
+    
+    // Bônus para quem indicou
+    await tx.update(userWallets)
+      .set({ creditsBalance: sql`${userWallets.creditsBalance} + 100` })
+      .where(eq(userWallets.ownerId, referrer[0].ownerId));
+    
+    await tx.insert(creditTransactions).values([
+      { ownerId: newUserId, amount: 50, type: "referral_bonus", description: "Bônus de boas-vindas por indicação" },
+      { ownerId: referrer[0].ownerId, amount: 100, type: "referral_bonus", description: "Bônus por indicação de novo usuário" },
+    ]);
+  });
+  
+  return { success: true };
+}
+
+export async function handlePaymentWebhook(ownerId: number, amountCredits: number, transactionId: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db.transaction(async (tx) => {
+    await tx.update(userWallets)
+      .set({ creditsBalance: sql`${userWallets.creditsBalance} + ${amountCredits}`, planType: "pro" })
+      .where(eq(userWallets.ownerId, ownerId));
+    
+    await tx.insert(creditTransactions).values({
+      ownerId,
+      amount: amountCredits,
+      type: "purchase",
+      description: `Compra de créditos - Transação ${transactionId}`,
+    });
+  });
+  
+  return { success: true };
 }

@@ -32,6 +32,11 @@ import {
   listCaptionTemplates,
   upsertBrandKit,
   bulkApproveCandidates,
+  getUserWallet,
+  listCreditTransactions,
+  getInfrastructureStats,
+  handlePaymentWebhook,
+  processReferral,
 } from "./db";
 import { runAnalyticsRecalibration } from "./analytics_job";
 
@@ -366,6 +371,31 @@ export const appRouter = router({
     recalibrate: protectedProcedure.mutation(({ ctx }) =>
       runAnalyticsRecalibration(ctx.user.id)
     ),
+  }),
+  billing: router({
+    wallet: protectedProcedure.query(({ ctx }) => getUserWallet(ctx.user.id)),
+    transactions: protectedProcedure.query(({ ctx }) =>
+      listCreditTransactions(ctx.user.id)
+    ),
+  }),
+  admin: router({
+    stats: protectedProcedure.query(() => getInfrastructureStats()),
+  }),
+  webhooks: router({
+    mockPayment: protectedProcedure
+      .input(z.object({ amount: z.number().int().positive() }))
+      .mutation(({ ctx, input }) =>
+        handlePaymentWebhook(
+          ctx.user.id,
+          input.amount,
+          `MOCK_${Date.now()}`
+        )
+      ),
+    applyReferral: protectedProcedure
+      .input(z.object({ code: z.string() }))
+      .mutation(({ ctx, input }) =>
+        processReferral(input.code, ctx.user.id)
+      ),
   }),
   ai: router({
     generateMetadata: protectedProcedure

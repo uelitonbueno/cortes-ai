@@ -422,3 +422,41 @@ export const captionTemplates = mysqlTable(
 
 export type BrandKit = typeof brandKits.$inferSelect;
 export type CaptionTemplate = typeof captionTemplates.$inferSelect;
+
+export const userWallets = mysqlTable(
+  "user_wallets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull().unique(),
+    creditsBalance: int("creditsBalance").default(0).notNull(),
+    planType: mysqlEnum("planType", ["free", "pro", "enterprise"]).default("free").notNull(),
+    planExpiresAt: timestamp("planExpiresAt"),
+    referralCode: varchar("referralCode", { length: 50 }).unique(),
+    referredBy: int("referredBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ownerIdx: index("wallet_owner_idx").on(table.ownerId),
+  })
+);
+
+export const creditTransactions = mysqlTable(
+  "credit_transactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull(),
+    amount: int("amount").notNull(), // Positivo para recarga, negativo para consumo
+    type: mysqlEnum("type", ["purchase", "consumption", "referral_bonus", "refund"]).notNull(),
+    description: varchar("description", { length: 255 }),
+    referenceEntity: varchar("referenceEntity", { length: 50 }), // ex: "source_video", "clip"
+    referenceId: int("referenceId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    ownerIdx: index("tx_owner_idx").on(table.ownerId),
+  })
+);
+
+export type UserWallet = typeof userWallets.$inferSelect;
+export type CreditTransaction = typeof creditTransactions.$inferSelect;

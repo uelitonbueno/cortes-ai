@@ -26,6 +26,7 @@ const statusLabels: Record<string, string> = {
 export default function Home() {
   const overview = trpc.dashboard.overview.useQuery();
   const jobs = trpc.dashboard.jobs.useQuery();
+  const wallet = trpc.billing.wallet.useQuery();
   const stats = overview.data ?? {
     videos: 0,
     review: 0,
@@ -35,10 +36,16 @@ export default function Home() {
   };
   const cards = [
     {
+      label: "Créditos disponíveis",
+      value: wallet.data?.creditsBalance ?? 0,
+      icon: Sparkles,
+      tone: "text-cyan-600 bg-cyan-50",
+    },
+    {
       label: "Vídeos processados",
       value: stats.videos,
       icon: Film,
-      tone: "text-cyan-600 bg-cyan-50",
+      tone: "text-slate-600 bg-slate-50",
     },
     {
       label: "Aguardando revisão",
@@ -47,15 +54,9 @@ export default function Home() {
       tone: "text-amber-600 bg-amber-50",
     },
     {
-      label: "Agendados",
-      value: stats.scheduled,
-      icon: Radio,
-      tone: "text-violet-600 bg-violet-50",
-    },
-    {
       label: "Publicados",
       value: stats.published,
-      icon: Sparkles,
+      icon: Radio,
       tone: "text-emerald-600 bg-emerald-50",
     },
   ];
@@ -184,28 +185,39 @@ export default function Home() {
           <Card className="border-0 bg-[#f5f8fb] shadow-sm shadow-slate-200/70">
             <CardHeader>
               <CardTitle className="text-lg text-slate-900">
-                Saúde operacional
+                Plano e Faturamento
               </CardTitle>
               <p className="mt-1 text-sm text-slate-500">
-                Sinais que merecem atenção agora.
+                Seu status atual na plataforma.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start gap-3 rounded-2xl bg-white p-4">
-                <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
-                  <Radio className="h-4 w-4" />
+              <div className="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-sm">
+                <div className="rounded-xl bg-cyan-50 p-2 text-cyan-600">
+                  <Sparkles className="h-4 w-4" />
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-800">
-                    Armazenamento seguro
-                  </p>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-slate-800">
+                      Plano {wallet.data?.planType.toUpperCase() || "FREE"}
+                    </p>
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      Ativo
+                    </Badge>
+                  </div>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Artefatos serão mantidos por chave de objeto e servidos por
-                    URLs temporárias.
+                    Você tem {wallet.data?.creditsBalance || 0} créditos.
+                    Upgrade para PRO libera vídeos de 10h.
                   </p>
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 text-xs text-cyan-700"
+                  >
+                    Fazer upgrade
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-start gap-3 rounded-2xl bg-white p-4">
+              <div className="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-sm">
                 <div className="rounded-xl bg-amber-50 p-2 text-amber-600">
                   <CircleAlert className="h-4 w-4" />
                 </div>
