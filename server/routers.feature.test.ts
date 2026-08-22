@@ -104,7 +104,7 @@ describe("feature mutations", () => {
     mocks.startSourceVideoPipeline.mockResolvedValue({
       videoId: 3,
       status: "normalizing",
-      stages: ["ingest", "transcribe", "detect_highlights", "render"],
+      stages: ["ingest", "transcribe", "vision", "detect_highlights", "render"],
     });
     mocks.cancelSourceVideoPipeline.mockResolvedValue({
       videoId: 3,

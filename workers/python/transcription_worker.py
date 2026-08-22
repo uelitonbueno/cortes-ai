@@ -21,7 +21,7 @@ class TranscriptionTask(BaseModel):
     source_video_id: int
     audio_url: HttpUrl
     callback_url: HttpUrl
-    language: str = "pt"
+    language: str | None = None
     model_name: str = "large-v3"
     idempotency_key: str
 
@@ -39,7 +39,7 @@ def transcribe(task: TranscriptionTask, model: WhisperModel) -> dict:
     with tempfile.TemporaryDirectory(prefix="cortes-ai-") as directory:
         audio_path = Path(directory) / "audio.wav"
         download_audio(str(task.audio_url), audio_path)
-        segments, info = model.transcribe(str(audio_path), language=task.language, word_timestamps=True, vad_filter=True)
+        segments, info = model.transcribe(str(audio_path), language=task.language, word_timestamps=True, vad_filter=True, initial_prompt="Vídeo do Cortes AI")
         normalized = []
         word_count = 0
         for index, segment in enumerate(segments):

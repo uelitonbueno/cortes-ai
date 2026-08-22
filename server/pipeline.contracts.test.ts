@@ -34,6 +34,8 @@ describe("pipeline contracts", () => {
 
   it("accepts only forward pipeline transitions", () => {
     expect(isValidTransition("uploaded", "normalizing")).toBe(true);
+    expect(isValidTransition("transcribing", "visioning")).toBe(true);
+    expect(isValidTransition("visioning", "detecting")).toBe(true);
     expect(isValidTransition("awaiting_review", "approved")).toBe(true);
     expect(isValidTransition("published", "uploaded")).toBe(false);
     expect(isValidTransition("rendering", "published")).toBe(false);

@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { SourceType } from "../shared/pipeline";
+import { SourceType, PipelineState } from "../shared/pipeline";
 import {
   alerts,
   integrationSettings,
@@ -542,6 +542,7 @@ export async function updatePipelineJobFromWorker(input: {
             {
               ingest: "normalizing",
               transcribe: "transcribing",
+              vision: "visioning",
               detect_highlights: "detecting",
               render: "rendering",
             } as const
@@ -549,7 +550,8 @@ export async function updatePipelineJobFromWorker(input: {
         : (
             {
               ingest: "transcribing",
-              transcribe: "detecting",
+              transcribe: "visioning",
+              vision: "detecting",
               detect_highlights: "rendering",
               render: "awaiting_review",
             } as const
@@ -735,6 +737,11 @@ export async function startSourceVideoPipeline(
       idempotencyKey: `transcribe:${sourceVideoId}`,
     },
     {
+      jobType: "vision" as const,
+      queueName: "pipeline.cpu",
+      idempotencyKey: `vision:${sourceVideoId}`,
+    },
+    {
       jobType: "detect_highlights" as const,
       queueName: "pipeline.llm",
       idempotencyKey: `detect:${sourceVideoId}`,
@@ -763,7 +770,7 @@ export async function startSourceVideoPipeline(
     .where(eq(sourceVideos.id, sourceVideoId));
   return {
     videoId: sourceVideoId,
-    status: "normalizing" as const,
+    status: "normalizing" as PipelineState,
     stages: stages.map(stage => stage.jobType),
   };
 }

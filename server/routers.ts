@@ -33,6 +33,7 @@ import {
   upsertBrandKit,
   bulkApproveCandidates,
 } from "./db";
+import { runAnalyticsRecalibration } from "./analytics_job";
 
 const platformSchema = z.enum(["youtube", "tiktok", "instagram"]);
 
@@ -289,6 +290,11 @@ export const appRouter = router({
   publications: router({
     list: protectedProcedure.query(({ ctx }) => listPublications(ctx.user.id)),
     platforms: protectedProcedure.query(() => platformSchema.options),
+  }),
+  analytics: router({
+    recalibrate: protectedProcedure.mutation(({ ctx }) =>
+      runAnalyticsRecalibration(ctx.user.id)
+    ),
   }),
   pipeline: router({
     reportEvent: protectedProcedure

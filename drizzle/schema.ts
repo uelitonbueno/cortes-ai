@@ -111,6 +111,7 @@ export const processingJobs = mysqlTable(
     jobType: mysqlEnum("jobType", [
       "ingest",
       "transcribe",
+      "vision",
       "detect_highlights",
       "render",
       "thumbnail",
@@ -183,6 +184,7 @@ export const clipCandidates = mysqlTable(
     category: varchar("category", { length: 40 }).notNull(),
     llmScore: int("llmScore"),
     audioScore: int("audioScore"),
+    visionScore: int("visionScore"),
     chatScore: int("chatScore"),
     finalScore: int("finalScore").notNull(),
     hookText: varchar("hookText", { length: 255 }),

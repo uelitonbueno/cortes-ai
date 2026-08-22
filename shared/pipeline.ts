@@ -2,6 +2,7 @@ export const PIPELINE_STATES = [
   "uploaded",
   "normalizing",
   "transcribing",
+  "visioning",
   "detecting",
   "rendering",
   "awaiting_review",
@@ -93,7 +94,8 @@ export function isValidTransition(from: PipelineState, to: PipelineState) {
   const allowed: Record<PipelineState, PipelineState[]> = {
     uploaded: ["normalizing"],
     normalizing: ["transcribing"],
-    transcribing: ["detecting"],
+    transcribing: ["visioning"],
+    visioning: ["detecting"],
     detecting: ["rendering"],
     rendering: ["awaiting_review"],
     awaiting_review: ["approved"],
