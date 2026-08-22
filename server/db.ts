@@ -387,55 +387,56 @@ export async function updateCandidateReview(input: {
         title: input.suggestedTitle ?? candidate[0].suggestedTitle,
         status: "rendering",
       });
-  const clip = await db
-    .select()
-    .from(clips)
-    .where(
-      and(eq(clips.ownerId, input.ownerId), eq(clips.candidateId, input.id))
-    )
-    .orderBy(desc(clips.createdAt))
-    .limit(1);
-  if (clip[0]) {
-    // Fase 4: Consumir créditos por renderização de clip
-    await consumeCredits({
-      ownerId: input.ownerId,
-      amount: 5, // Custo por clip aprovado
-      type: "consumption",
-      description: `Renderização do clip: ${input.suggestedTitle || "Corte"}`,
-      referenceEntity: "clip",
-      referenceId: clip[0].id,
-    });
+    const clip = await db
+      .select()
+      .from(clips)
+      .where(
+        and(eq(clips.ownerId, input.ownerId), eq(clips.candidateId, input.id))
+      )
+      .orderBy(desc(clips.createdAt))
+      .limit(1);
+    if (clip[0]) {
+      // Fase 4: Consumir créditos por renderização de clip
+      await consumeCredits({
+        ownerId: input.ownerId,
+        amount: 5, // Custo por clip aprovado
+        type: "consumption",
+        description: `Renderização do clip: ${input.suggestedTitle || "Corte"}`,
+        referenceEntity: "clip",
+        referenceId: clip[0].id,
+      });
 
-    await db.insert(processingJobs).values([
-      {
-        ownerId: input.ownerId,
-        sourceVideoId: candidate[0].sourceVideoId,
-        candidateId: input.id,
-        clipId: clip[0].id,
-        jobType: "metadata",
-        queueName: "pipeline.llm",
-        status: "queued",
-        idempotencyKey: `metadata:clip:${clip[0].id}`,
-        metadata: {
-          brandKitId: input.brandKitId,
-          templateId: input.templateId,
+      await db.insert(processingJobs).values([
+        {
+          ownerId: input.ownerId,
+          sourceVideoId: candidate[0].sourceVideoId,
+          candidateId: input.id,
+          clipId: clip[0].id,
+          jobType: "metadata",
+          queueName: "pipeline.llm",
+          status: "queued",
+          idempotencyKey: `metadata:clip:${clip[0].id}`,
+          metadata: {
+            brandKitId: input.brandKitId,
+            templateId: input.templateId,
+          },
         },
-      },
-      {
-        ownerId: input.ownerId,
-        sourceVideoId: candidate[0].sourceVideoId,
-        candidateId: input.id,
-        clipId: clip[0].id,
-        jobType: "thumbnail",
-        queueName: "pipeline.cpu",
-        status: "queued",
-        idempotencyKey: `thumbnail:clip:${clip[0].id}`,
-        metadata: {
-          brandKitId: input.brandKitId,
-          templateId: input.templateId,
+        {
+          ownerId: input.ownerId,
+          sourceVideoId: candidate[0].sourceVideoId,
+          candidateId: input.id,
+          clipId: clip[0].id,
+          jobType: "thumbnail",
+          queueName: "pipeline.cpu",
+          status: "queued",
+          idempotencyKey: `thumbnail:clip:${clip[0].id}`,
+          metadata: {
+            brandKitId: input.brandKitId,
+            templateId: input.templateId,
+          },
         },
-      },
-    ]);
+      ]);
+    }
   }
   return { ...candidate[0], status: input.status };
 }
@@ -515,7 +516,7 @@ export async function updatePipelineJobFromWorker(input: {
   jobId: number;
   sourceVideoId: number;
   ownerId: number;
-  jobType: "ingest" | "transcribe" | "detect_highlights" | "render";
+  jobType: "ingest" | "transcribe" | "vision" | "detect_highlights" | "render";
   status: "running" | "succeeded" | "failed";
   errorMessage?: string;
 }) {
