@@ -1,3 +1,4 @@
+
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { SourceType, PipelineState } from "../shared/pipeline";
@@ -301,19 +302,6 @@ export async function upsertIntegrationSetting(input: {
       .set(values)
       .where(eq(integrationSettings.id, existing[0].id));
   else await db.insert(integrationSettings).values(values);
-  const saved = await db
-    .select()
-    .from(integrationSettings)
-    .where(
-      and(
-        eq(integrationSettings.ownerId, input.ownerId),
-        eq(integrationSettings.platform, input.platform)
-      )
-    )
-    .limit(1);
-  return saved[0]
-    ? { ...saved[0], accessToken: maskIntegrationSecret(saved[0].accessToken) }
-    : null;
 }
 
 export async function listAlerts(ownerId: number) {
@@ -322,19 +310,17 @@ export async function listAlerts(ownerId: number) {
   return db
     .select()
     .from(alerts)
-    .where(eq(alerts.ownerId, ownerId))
-    .orderBy(desc(alerts.createdAt))
-    .limit(50);
+    .where(and(eq(alerts.ownerId, ownerId), eq(alerts.isRead, false)))
+    .orderBy(desc(alerts.createdAt));
 }
 
-export async function markAlertRead(ownerId: number, id: number) {
+export async function markAlertRead(ownerId: number, alertId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database unavailable");
+  if (!db) return;
   await db
     .update(alerts)
-    .set({ readAt: new Date() })
-    .where(and(eq(alerts.ownerId, ownerId), eq(alerts.id, id)));
-  return { success: true };
+    .set({ isRead: true })
+    .where(and(eq(alerts.id, alertId), eq(alerts.ownerId, ownerId)));
 }
 
 export async function listPublications(ownerId: number) {
@@ -396,10 +382,9 @@ export async function updateCandidateReview(input: {
       .orderBy(desc(clips.createdAt))
       .limit(1);
     if (clip[0]) {
-      // Fase 4: Consumir créditos por renderização de clip
       await consumeCredits({
         ownerId: input.ownerId,
-        amount: 5, // Custo por clip aprovado
+        amount: 5,
         type: "consumption",
         description: `Renderização do clip: ${input.suggestedTitle || "Corte"}`,
         referenceEntity: "clip",
@@ -449,65 +434,41 @@ export async function saveScoreCalibration(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db
-    .insert(scoreCalibrations)
-    .values({
-      ownerId: input.ownerId,
-      weightsJson: input.weights,
-      sampleSize: input.sampleSize,
-      modelVersion: input.modelVersion ?? "v1",
-    });
-  const rows = await db
-    .select()
-    .from(scoreCalibrations)
-    .where(eq(scoreCalibrations.ownerId, input.ownerId))
-    .orderBy(desc(scoreCalibrations.createdAt))
-    .limit(1);
-  return rows[0];
+  await db.insert(scoreCalibrations).values({
+    ownerId: input.ownerId,
+    weightsJson: input.weights,
+    sampleSize: input.sampleSize,
+    modelVersion: input.modelVersion ?? "v1",
+  });
 }
 
 export async function getLatestScoreCalibration(ownerId: number) {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db
+  const result = await db
     .select()
     .from(scoreCalibrations)
     .where(eq(scoreCalibrations.ownerId, ownerId))
     .orderBy(desc(scoreCalibrations.createdAt))
     .limit(1);
-  return rows[0] ?? null;
+  return result[0];
 }
 
 export async function getAnalyticsSummary(ownerId: number) {
   const db = await getDb();
-  if (!db)
-    return {
-      views: 0,
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      retention: 0,
-      publications: 0,
-    };
-  const rows = await db
+  if (!db) return null;
+  const [row] = await db
     .select({
-      views: sql<number>`coalesce(sum(${metrics.views}), 0)`,
-      likes: sql<number>`coalesce(sum(${metrics.likes}), 0)`,
-      comments: sql<number>`coalesce(sum(${metrics.comments}), 0)`,
-      shares: sql<number>`coalesce(sum(${metrics.shares}), 0)`,
-      retention: sql<number>`coalesce(avg(${metrics.retentionRate}), 0)`,
-      publications: sql<number>`count(distinct ${publications.id})`,
+      avgScore: sql<number>`avg(${clipCandidates.finalScore})`,
+      totalClips: sql<number>`count(*)`,
+      publications: sql<number>`count(${publications.id})`,
     })
-    .from(metrics)
-    .innerJoin(publications, eq(metrics.publicationId, publications.id))
-    .where(eq(publications.ownerId, ownerId));
-  const row = rows[0];
+    .from(clipCandidates)
+    .leftJoin(publications, eq(clipCandidates.id, publications.clipId))
+    .where(eq(clipCandidates.ownerId, ownerId));
   return {
-    views: Number(row?.views ?? 0),
-    likes: Number(row?.likes ?? 0),
-    comments: Number(row?.comments ?? 0),
-    shares: Number(row?.shares ?? 0),
-    retention: Number(row?.retention ?? 0),
+    avgScore: Number(row?.avgScore ?? 0),
+    totalClips: Number(row?.totalClips ?? 0),
     publications: Number(row?.publications ?? 0),
   };
 }
@@ -627,7 +588,7 @@ export async function completeIngestCallback(input: {
         ownerId: input.ownerId,
         artifactType: "audio",
         storageKey: input.audio.storageKey,
-        mimeType: input.audio.mimeType,
+        mimeType: input.audio.byteSize,
         byteSize: input.audio.byteSize,
         processingVersion: "v1",
       });
@@ -676,12 +637,56 @@ export async function registerArtifact(input: {
     .where(
       and(
         eq(mediaArtifacts.ownerId, input.ownerId),
-        eq(mediaArtifacts.sourceVideoId, input.sourceVideoId),
         eq(mediaArtifacts.storageKey, input.storageKey)
       )
     )
     .limit(1);
   return result[0];
+}
+
+export async function getMediaArtifact(ownerId: number, artifactId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(mediaArtifacts)
+    .where(
+      and(
+        eq(mediaArtifacts.id, artifactId),
+        eq(mediaArtifacts.ownerId, ownerId)
+      )
+    )
+    .limit(1);
+  return result[0];
+}
+
+export async function listMediaArtifacts(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(mediaArtifacts)
+    .where(eq(mediaArtifacts.ownerId, ownerId))
+    .orderBy(desc(mediaArtifacts.createdAt))
+    .limit(100);
+}
+
+export async function listMediaArtifactsByVideo(
+  ownerId: number,
+  sourceVideoId: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(mediaArtifacts)
+    .where(
+      and(
+        eq(mediaArtifacts.ownerId, ownerId),
+        eq(mediaArtifacts.sourceVideoId, sourceVideoId)
+      )
+    )
+    .orderBy(desc(mediaArtifacts.createdAt));
 }
 
 export async function cancelSourceVideoPipeline(
@@ -690,35 +695,22 @@ export async function cancelSourceVideoPipeline(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const rows = await db
-    .select()
-    .from(sourceVideos)
-    .where(
-      and(eq(sourceVideos.ownerId, ownerId), eq(sourceVideos.id, sourceVideoId))
-    )
-    .limit(1);
-  if (!rows[0]) return null;
   await db
     .update(processingJobs)
-    .set({
-      status: "cancelled",
-      errorMessage: "Cancelado pelo usuário",
-      updatedAt: new Date(),
-    })
+    .set({ status: "cancelled", updatedAt: new Date() })
     .where(
       and(
         eq(processingJobs.ownerId, ownerId),
-        eq(processingJobs.sourceVideoId, sourceVideoId)
+        eq(processingJobs.sourceVideoId, sourceVideoId),
+        eq(processingJobs.status, "queued")
       )
     );
   await db
     .update(sourceVideos)
-    .set({
-      status: "failed",
-      errorMessage: "Pipeline cancelado pelo usuário",
-      updatedAt: new Date(),
-    })
-    .where(eq(sourceVideos.id, sourceVideoId));
+    .set({ status: "failed", errorMessage: "Cancelado pelo usuário" })
+    .where(
+      and(eq(sourceVideos.id, sourceVideoId), eq(sourceVideos.ownerId, ownerId))
+    );
   return { videoId: sourceVideoId, status: "failed" as const };
 }
 
@@ -738,13 +730,12 @@ export async function startSourceVideoPipeline(
   const video = rows[0];
   if (!video) return null;
 
-  // Fase 4: Verificar créditos e limites
   const limits = await checkPlanLimits(ownerId, video.durationSeconds || 0);
   if (!limits.allowed) throw new Error(`Limite do plano excedido: ${limits.reason}`);
 
   await consumeCredits({
     ownerId,
-    amount: 10, // Custo base por pipeline
+    amount: 10,
     type: "consumption",
     description: `Processamento do vídeo: ${video.title}`,
     referenceEntity: "source_video",
@@ -901,154 +892,6 @@ export async function bulkApproveCandidates(input: {
     results.push(res);
   }
   return results;
-}
-
-export const PLAN_LIMITS = {
-  free: { maxVideoDuration: 1800, maxClipsPerVideo: 5, priority: 0 },
-  pro: { maxVideoDuration: 36000, maxClipsPerVideo: 50, priority: 1 },
-  enterprise: { maxVideoDuration: 86400, maxClipsPerVideo: 200, priority: 2 },
-} as const;
-
-export async function getUserWallet(ownerId: number) {
-  const db = await getDb();
-  if (!db) return null;
-  const result = await db.select().from(userWallets).where(eq(userWallets.ownerId, ownerId)).limit(1);
-  if (result[0]) return result[0];
-  
-  // Criar carteira inicial se não existir
-  const initial = { ownerId, creditsBalance: 100, planType: "free" as const };
-  await db.insert(userWallets).values(initial);
-  return { ...initial, id: 0, createdAt: new Date(), updatedAt: new Date(), planExpiresAt: null, referralCode: null, referredBy: null };
-}
-
-export async function consumeCredits(input: {
-  ownerId: number;
-  amount: number;
-  type: "consumption";
-  description: string;
-  referenceEntity?: string;
-  referenceId?: number;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database unavailable");
-  
-  const wallet = await getUserWallet(input.ownerId);
-  if (!wallet || wallet.creditsBalance < input.amount) {
-    throw new Error("Créditos insuficientes");
-  }
-
-  await db.transaction(async (tx) => {
-    await tx.update(userWallets)
-      .set({ creditsBalance: sql`${userWallets.creditsBalance} - ${input.amount}` })
-      .where(eq(userWallets.ownerId, input.ownerId));
-    
-    await tx.insert(creditTransactions).values({
-      ownerId: input.ownerId,
-      amount: -input.amount,
-      type: input.type,
-      description: input.description,
-      referenceEntity: input.referenceEntity,
-      referenceId: input.referenceId,
-    });
-  });
-
-  return { success: true, remaining: wallet.creditsBalance - input.amount };
-}
-
-export async function checkPlanLimits(ownerId: number, videoDuration: number) {
-  const wallet = await getUserWallet(ownerId);
-  if (!wallet) return { allowed: false, reason: "wallet_not_found" };
-  
-  const limits = PLAN_LIMITS[wallet.planType];
-  if (videoDuration > limits.maxVideoDuration) {
-    return { allowed: false, reason: "duration_limit_exceeded", limit: limits.maxVideoDuration };
-  }
-  
-  return { allowed: true, plan: wallet.planType };
-}
-
-export async function listCreditTransactions(ownerId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(creditTransactions)
-    .where(eq(creditTransactions.ownerId, ownerId))
-    .orderBy(desc(creditTransactions.createdAt))
-    .limit(50);
-}
-
-export async function getInfrastructureStats() {
-  const db = await getDb();
-  if (!db) return null;
-  
-  const [jobStats] = await db
-    .select({
-      total: sql<number>`count(*)`,
-      failed: sql<number>`count(case when status = 'failed' then 1 end)`,
-      queued: sql<number>`count(case when status = 'queued' then 1 end)`,
-    })
-    .from(processingJobs);
-
-  const [videoStats] = await db
-    .select({
-      totalVideos: sql<number>`count(*)`,
-      totalDuration: sql<number>`sum(${sourceVideos.durationSeconds})`,
-    })
-    .from(sourceVideos);
-
-  return {
-    jobs: jobStats,
-    videos: videoStats,
-    timestamp: new Date(),
-  };
-}
-
-export async function processReferral(code: string, newUserId: number) {
-  const db = await getDb();
-  if (!db) return null;
-  
-  const referrer = await db.select().from(userWallets).where(eq(userWallets.referralCode, code)).limit(1);
-  if (!referrer[0]) return null;
-
-  await db.transaction(async (tx) => {
-    // Atualizar novo usuário
-    await tx.update(userWallets)
-      .set({ referredBy: referrer[0].ownerId, creditsBalance: sql`${userWallets.creditsBalance} + 50` })
-      .where(eq(userWallets.ownerId, newUserId));
-    
-    // Bônus para quem indicou
-    await tx.update(userWallets)
-      .set({ creditsBalance: sql`${userWallets.creditsBalance} + 100` })
-      .where(eq(userWallets.ownerId, referrer[0].ownerId));
-    
-    await tx.insert(creditTransactions).values([
-      { ownerId: newUserId, amount: 50, type: "referral_bonus", description: "Bônus de boas-vindas por indicação" },
-      { ownerId: referrer[0].ownerId, amount: 100, type: "referral_bonus", description: "Bônus por indicação de novo usuário" },
-    ]);
-  });
-  
-  return { success: true };
-}
-
-export async function handlePaymentWebhook(ownerId: number, amountCredits: number, transactionId: string) {
-  const db = await getDb();
-  if (!db) return null;
-
-  await db.transaction(async (tx) => {
-    await tx.update(userWallets)
-      .set({ creditsBalance: sql`${userWallets.creditsBalance} + ${amountCredits}`, planType: "pro" })
-      .where(eq(userWallets.ownerId, ownerId));
-    
-    await tx.insert(creditTransactions).values({
-      ownerId,
-      amount: amountCredits,
-      type: "purchase",
-      description: `Compra de créditos - Transação ${transactionId}`,
-    });
-  });
-  
-  return { success: true };
 }
 
 export const PLAN_LIMITS = {
