@@ -12,7 +12,7 @@ export async function runAnalyticsRecalibration(ownerId: number) {
   const observations = await db
     .select({
       predictedScore: clipCandidates.finalScore,
-      retentionRate: metrics.retentionRate,
+      retentionRate: sql<number>`coalesce(${metrics.retentionRate}, 0)`,
       approved: sql<boolean>`${clipCandidates.status} = 'approved'`,
     })
     .from(clipCandidates)
