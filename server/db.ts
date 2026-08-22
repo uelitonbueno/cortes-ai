@@ -588,7 +588,7 @@ export async function completeIngestCallback(input: {
         ownerId: input.ownerId,
         artifactType: "audio",
         storageKey: input.audio.storageKey,
-        mimeType: input.audio.byteSize,
+        mimeType: input.audio.mimeType,
         byteSize: input.audio.byteSize,
         processingVersion: "v1",
       });
