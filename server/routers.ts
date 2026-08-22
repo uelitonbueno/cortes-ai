@@ -291,11 +291,7 @@ export const appRouter = router({
     list: protectedProcedure.query(({ ctx }) => listPublications(ctx.user.id)),
     platforms: protectedProcedure.query(() => platformSchema.options),
   }),
-  analytics: router({
-    recalibrate: protectedProcedure.mutation(({ ctx }) =>
-      runAnalyticsRecalibration(ctx.user.id)
-    ),
-  }),
+
   pipeline: router({
     reportEvent: protectedProcedure
       .input(
@@ -366,6 +362,9 @@ export const appRouter = router({
     ),
     latestCalibration: protectedProcedure.query(({ ctx }) =>
       getLatestScoreCalibration(ctx.user.id)
+    ),
+    recalibrate: protectedProcedure.mutation(({ ctx }) =>
+      runAnalyticsRecalibration(ctx.user.id)
     ),
   }),
   ai: router({

@@ -559,7 +559,7 @@ export async function updatePipelineJobFromWorker(input: {
   await db
     .update(sourceVideos)
     .set({
-      status: nextStatus,
+      status: nextStatus as any,
       errorMessage: input.errorMessage ?? null,
       updatedAt: new Date(),
     })
