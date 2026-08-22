@@ -310,7 +310,7 @@ export async function listAlerts(ownerId: number) {
   return db
     .select()
     .from(alerts)
-    .where(and(eq(alerts.ownerId, ownerId), eq(alerts.isRead, false)))
+    .where(and(eq(alerts.ownerId, ownerId), sql`${alerts.readAt} is null`))
     .orderBy(desc(alerts.createdAt));
 }
 
@@ -319,7 +319,7 @@ export async function markAlertRead(ownerId: number, alertId: number) {
   if (!db) return;
   await db
     .update(alerts)
-    .set({ isRead: true })
+    .set({ readAt: new Date() })
     .where(and(eq(alerts.id, alertId), eq(alerts.ownerId, ownerId)));
 }
 

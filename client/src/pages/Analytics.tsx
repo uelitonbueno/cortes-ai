@@ -13,7 +13,7 @@ import {
 
 export default function Analytics() {
   const query = trpc.analytics.summary.useQuery();
-  const data = query.data ?? {
+  const data = (query.data as any) ?? {
     views: 0,
     likes: 0,
     comments: 0,
