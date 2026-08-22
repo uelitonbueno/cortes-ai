@@ -135,7 +135,7 @@ export const appRouter = router({
           result.videoId
         );
         const rawArtifact = pipelineDetail?.artifacts.find(
-          artifact => artifact.artifactType === "raw_video"
+          (artifact: any) => artifact.artifactType === "raw_video"
         );
         const sourceUrl = rawArtifact
           ? await storageGetSignedUrl(rawArtifact.storageKey)
@@ -191,7 +191,7 @@ export const appRouter = router({
           result.videoId
         );
         const rawArtifact = pipelineDetail?.artifacts.find(
-          artifact => artifact.artifactType === "raw_video"
+          (artifact: any) => artifact.artifactType === "raw_video"
         );
         const sourceUrl = rawArtifact
           ? await storageGetSignedUrl(rawArtifact.storageKey)
@@ -234,7 +234,7 @@ export const appRouter = router({
         const detail = await getPipelineDetail(ctx.user.id, input.id);
         if (!detail) return null;
         const artifacts = await Promise.all(
-          detail.artifacts.map(async artifact => ({
+          detail.artifacts.map(async (artifact: any) => ({
             ...artifact,
             signedUrl: await storageGetSignedUrl(artifact.storageKey),
           }))
